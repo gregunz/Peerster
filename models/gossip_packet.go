@@ -1,4 +1,4 @@
-package communication
+package models
 
 type GossipPacket struct {
 	Simple *SimpleMessage

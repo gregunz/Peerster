@@ -18,5 +18,4 @@ func main() {
 
 	fmt.Println(uiPort)
 	fmt.Println(msg)
-
 }
