@@ -2,69 +2,116 @@ package gossiper
 
 import (
 	"fmt"
+	"github.com/dedis/protobuf"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/models"
+	"github.com/gregunz/Peerster/utils"
 	"net"
+	"sync"
 )
 
 type Gossiper struct {
-	address *net.UDPAddr
-	conn    *net.UDPConn
-	Name    string
-	Peers   *models.Peers
+	address    *models.Address
+	peerConn   *net.UDPConn
+	clientConn *net.UDPConn
+	Name       string
+	Peers      *models.PeersSet
 }
 
-func NewGossiper(address, name string) *Gossiper {
-	udpAddr, err := net.ResolveUDPAddr("udp4", address)
-	common.HandleError(err)
-	udpConn, err := net.ListenUDP("udp4", udpAddr)
-	common.HandleError(err)
+func NewGossiper(address *models.Address, name string, uiPort uint, peers *models.PeersSet) *Gossiper {
 
-	peers := models.EmptyPeers()
+	_, peerConn := utils.ConnectToIpPort(address.ToIpPort())
+	_, clientConn := utils.ConnectToIpPort(fmt.Sprintf("localhost:%d", uiPort))
+
 	return &Gossiper{
-		address: udpAddr,
-		conn:    udpConn,
-		Name:    name,
-		Peers:   peers,
+		address:    address,
+		peerConn:   peerConn,
+		clientConn: clientConn,
+		Name:       name,
+		Peers:      peers,
 	}
 }
 
-func (g *Gossiper) AddPeer(peer string) {
+func (g *Gossiper) AddPeer(peer models.Peer) {
 	g.Peers.AddPeer(peer)
 }
 
-func (g *Gossiper) BroadcastFromClient(message *models.SimpleMessage, senderName string, senderAddr models.Peer) {
-	ackClientMessage(message)
-	message.OriginalName = senderName
-	message.RelayPeerAddr = senderAddr.String()
-	g.broadcast(message, g.Peers)
+func (g *Gossiper) Start() {
+	var group sync.WaitGroup
+
+	g.listenClient(&group)
+	g.listenPeers(&group)
+
+	fmt.Println("Ready!")
+	group.Wait()
 }
 
-func (g *Gossiper) BroadcastFromPeer(message *models.SimpleMessage, senderAddr models.Peer) {
-	ackPeerMessage(message)
-	relayPeerAddr := message.RelayPeerAddr
-	message.RelayPeerAddr = senderAddr.String()
-	g.AddPeer(relayPeerAddr)
-	g.broadcast(message, g.Peers)
+func (g *Gossiper) listenClient(group *sync.WaitGroup) {
+	group.Add(1)
+	go g.listen(g.clientConn, group, func(packetBytes []byte, addr *net.UDPAddr) {
+		var packet models.GossipPacket
+		protobuf.Decode(packetBytes, &packet)
+		g.broadcast(&packet, true)
+	})
 }
 
-func (g *Gossiper) broadcast(message *models.SimpleMessage, to *models.Peers) {
-	//packetBytes, err := protobuf.Encode(message)
-	//common.HandleError(err)
-	/*for _, p := range g.Peers.GetPeersList() {
+func (g *Gossiper) listenPeers(group *sync.WaitGroup) {
+	group.Add(1)
+	go g.listen(g.peerConn, group, func(packetBytes []byte, addr *net.UDPAddr) {
+		var packet models.GossipPacket
+		protobuf.Decode(packetBytes, &packet)
+		g.broadcast(&packet, false)
+	})
+}
+
+func (g *Gossiper) listen(conn *net.UDPConn, group *sync.WaitGroup, callback func([]byte, *net.UDPAddr)) {
+	defer conn.Close()
+	defer group.Done()
+	buffer := make([]byte, 65535)
+	for {
+		n, udpAddr, err := conn.ReadFromUDP(buffer)
+		common.HandleError(err)
+		callback(buffer[:n], udpAddr)
+	}
+}
+
+func (g Gossiper) broadcast(packet *models.GossipPacket, fromClient bool) {
+	common.HandleError(packet.Check())
+
+	toPeers := g.Peers
+
+	if packet.Simple != nil {
+		msg := packet.Simple
+		msg.Ack(fromClient)
+
+		if fromClient {
+			msg.OriginalName = g.Name
+			msg.RelayPeerAddr = g.address.ToIpPort()
+		} else {
+			relayPeerAddr := msg.RelayPeerAddr
+			newPeer := models.NewPeer(relayPeerAddr)
+			g.AddPeer(newPeer)
+			toPeers = g.Peers.Filter(newPeer) // not resending to sender
+		}
+		packet.Simple = msg
+	}
+
+	if packet.Rumor != nil {
+		// handle rumor message
+	}
+
+	if packet.Status != nil {
+		// handle status packet
 
 	}
-	net.UDPConn.WriteToUDP(packetBytes, upd_addr)
-	*/
-}
 
-func ackClientMessage(message *models.SimpleMessage) {
-	fmt.Printf("CLIENT MESSAGE %s\n", message.Contents)
-}
+	common.HandleError(packet.Check())
+	packetBytes, err := protobuf.Encode(packet)
+	common.HandleError(err)
 
-func ackPeerMessage(message *models.SimpleMessage) {
-	fmt.Printf("SIMPLE MESSAGE origin %s from %s contents %s\n",
-		message.OriginalName,
-		message.RelayPeerAddr,
-		message.Contents)
+	for _, p := range toPeers.GetSlice() {
+		// TODO: check if go routine is necessary here
+		go g.peerConn.WriteToUDP(packetBytes, p.Addr.UDPAddr)
+	}
+
 }

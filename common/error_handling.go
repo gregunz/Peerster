@@ -3,5 +3,7 @@ package common
 import "fmt"
 
 func HandleError(e error) {
-	fmt.Println(e)
+	if e != nil {
+		fmt.Println(e)
+	}
 }

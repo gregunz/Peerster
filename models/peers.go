@@ -2,71 +2,85 @@ package models
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/common"
 	"strings"
 	"sync"
 )
 
-type Peers struct {
-	peers map[string]Peer
-	mux   sync.Mutex
+type PeersSet struct {
+	peersMap map[string]Peer
+	mux      sync.Mutex
 }
 
-func (peers *Peers) String() string {
+func (peers *PeersSet) String() string {
 	return fmt.Sprint(*peers)
 }
 
-func (peers *Peers) Set(value string) error {
-	if peers.peers == nil {
-		peers.peers = make(map[string]Peer)
+func (peers *PeersSet) Set(value string) error {
+	if peers.peersMap == nil {
+		peers.init()
 	}
 	for _, ipPort := range strings.Split(value, ",") {
-		peers.AddPeer(ipPort)
+		peers.AddIpPort(ipPort)
 	}
 	return nil
 }
 
-func (peers Peers) ToStrings() []string {
+func (peers PeersSet) ToStrings() []string {
 	ls := []string{}
-	for _, a := range peers.peers {
-		ls = append(ls, a.String())
+	for _, p := range peers.peersMap {
+		ls = append(ls, p.Addr.ToIpPort())
 	}
 	return ls
 }
 
-func (peers Peers) ToString(sep string) string {
+func (peers PeersSet) ToString(sep string) string {
 	return strings.Join(peers.ToStrings(), sep)
 }
 
-func (peers *Peers) AddPeer(peer string) {
+func (peers *PeersSet) AddIpPort(ipPort string) {
+	peers.AddPeer(NewPeer(ipPort))
+}
+
+func (peers *PeersSet) AddPeer(peer Peer) {
+	if peers.peersMap == nil {
+		peers.init()
+	}
 	peers.mux.Lock()
-	peers.peers[peer] = StringToPeer(peer)
+	peers.peersMap[peer.Addr.ToIpPort()] = peer
 	peers.mux.Unlock()
 }
 
-func EmptyPeers() *Peers {
-	return &Peers{
-		peers: make(map[string]Peer),
+func NewPeersSet() *PeersSet {
+	return &PeersSet{
+		peersMap: make(map[string]Peer),
 	}
 }
 
-/*
-func (peers *Peers) GetPeersList() []Peer {
+func (peers *PeersSet) GetSlice() []Peer {
 	peersList := []Peer{}
-	for _, p := range peers.peers {
+	for _, p := range peers.peersMap {
 		peersList = append(peersList, p)
 	}
 	return peersList
 }
-*/
 
-func (peers *Peers) Filter(peer Peer) *Peers {
+func (peers *PeersSet) Filter(peer Peer) *PeersSet {
 	peersMap := make(map[string]Peer)
-	for ipPort, p := range peers.peers {
-		if ipPort != peer.String() {
+	for ipPort, p := range peers.peersMap {
+		if ipPort != peer.Addr.ToIpPort() {
 			peersMap[ipPort] = p
 		}
 	}
-	return &Peers{
-		peers: peersMap,
+	return &PeersSet{
+		peersMap: peersMap,
+	}
+}
+
+func (peers *PeersSet) init() {
+	if peers.peersMap == nil {
+		peers.peersMap = make(map[string]Peer)
+	} else {
+		common.HandleError(fmt.Errorf("PeersSet already initialized"))
 	}
 }
