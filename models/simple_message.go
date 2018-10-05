@@ -8,7 +8,7 @@ type SimpleMessage struct {
 	Contents      string
 }
 
-func (msg SimpleMessage) Ack(fromClient bool) {
+func (msg SimpleMessage) AckPrint(fromClient bool) {
 	if fromClient {
 		fmt.Printf("CLIENT MESSAGE %s\n", msg.Contents)
 	} else {

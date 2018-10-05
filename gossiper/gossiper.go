@@ -82,7 +82,7 @@ func (g Gossiper) broadcast(packet *models.GossipPacket, fromClient bool) {
 
 	if packet.Simple != nil {
 		msg := packet.Simple
-		msg.Ack(fromClient)
+		msg.AckPrint(fromClient)
 
 		if fromClient {
 			msg.OriginalName = g.Name
