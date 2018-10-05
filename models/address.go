@@ -28,3 +28,7 @@ func (addr *Address) Set(value string) error {
 	}
 	return nil
 }
+
+func (addr *Address) Equals(other *Address) bool {
+	return addr.ToIpPort() == other.ToIpPort()
+}

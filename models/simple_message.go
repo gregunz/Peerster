@@ -8,11 +8,17 @@ type SimpleMessage struct {
 	Contents      string
 }
 
-func (msg SimpleMessage) AckPrint(fromClient bool) {
+func (msg *SimpleMessage) AckPrint(fromClient bool) {
 	if fromClient {
 		fmt.Printf("CLIENT MESSAGE %s\n", msg.Contents)
 	} else {
 		fmt.Printf("SIMPLE MESSAGE origin %s from %s contents %s\n",
 			msg.OriginalName, msg.RelayPeerAddr, msg.Contents)
+	}
+}
+
+func (msg *SimpleMessage) ToGossipPacket() *GossipPacket {
+	return &GossipPacket{
+		Simple: msg,
 	}
 }
