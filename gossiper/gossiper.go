@@ -16,9 +16,14 @@ type Gossiper struct {
 	clientConn *net.UDPConn
 	name       string
 	peers      *models.PeersSet
+
 }
 
 func NewGossiper(address *models.Address, name string, uiPort uint, peers *models.PeersSet) *Gossiper {
+
+	fmt.Printf("Creating Peerster named <%s> listening peers on ip:port <%s> " +
+		"and listening local clients on port <%d> with peers <%s>\n",
+		name, address.ToIpPort(), uiPort, peers.ToString("> <"))
 
 	_, peerConn := utils.ConnectToIpPort(address.ToIpPort())
 	_, clientConn := utils.ConnectToIpPort(fmt.Sprintf("localhost:%d", uiPort))
@@ -60,7 +65,6 @@ func (g *Gossiper) listenPeers(group *sync.WaitGroup) {
 	group.Add(1)
 	go g.listen(g.peerConn, group, func(packet *models.GossipPacket, p *models.Peer) {
 		g.handle(packet, p, false)
-
 	})
 }
 
@@ -154,6 +158,6 @@ func (g *Gossiper) broadcast(packet *models.GossipPacket, to ...*models.Peer) {
 
 	for _, p := range to {
 		// TODO: check if go routine is necessary here
-		go g.peerConn.WriteToUDP(packetBytes, p.Addr.UDPAddr)
+		go g.peerConn.WriteToUDP(packetBytes, p.Addr.UDP())
 	}
 }

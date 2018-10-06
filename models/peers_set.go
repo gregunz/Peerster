@@ -57,12 +57,6 @@ func (peers *PeersSet) AddPeer(peer *Peer) {
 	peers.peersMap[peer.Addr.ToIpPort()] = peer
 }
 
-func NewEmptyPeersSet() *PeersSet {
-	return &PeersSet{
-		peersMap: make(map[string]*Peer),
-	}
-}
-
 func (peers *PeersSet) GetSlice() []*Peer {
 	peers.mux.Lock()
 	defer peers.mux.Unlock()
@@ -131,7 +125,33 @@ func (peers *PeersSet) SaveRumor(msg *RumorMessage, fromPeer *Peer) {
 }
 
 func (peers *PeersSet) AckPrint() {
-	if len(peers.peersMap) > 0 {
-		fmt.Printf("PEERS %s", peers.ToString(","))
+	if peers.NonEmpty() {
+		fmt.Printf("PEERS %s\n", peers.ToString(","))
 	}
+}
+
+func (peers *PeersSet) IsEmpty() bool {
+	return len(peers.peersMap) == 0
+}
+
+func (peers *PeersSet) NonEmpty() bool {
+	return !peers.IsEmpty()
+}
+
+func (peers *PeersSet) Extend(other *PeersSet) {
+	peers.mux.Lock()
+	defer peers.mux.Unlock()
+
+	for k, v := range other.peersMap {
+		peers.peersMap[k] = v
+	}
+}
+
+func (peers *PeersSet) Union(other *PeersSet) PeersSet {
+	var newPeersSet PeersSet
+	newPeersSet.init()
+	newPeersSet.Extend(peers)
+	newPeersSet.Extend(other)
+
+	return newPeersSet
 }

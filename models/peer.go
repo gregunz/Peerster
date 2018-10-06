@@ -1,7 +1,6 @@
 package models
 
 import (
-	"github.com/gregunz/Peerster/utils"
 	"sync"
 )
 
@@ -13,9 +12,8 @@ type Peer struct {
 }
 
 func NewPeer(s string) *Peer {
-	addr := utils.IpPortToUDPAddr(s)
 	return &Peer{
-		Addr:     &Address{UDPAddr: addr},
+		Addr:     NewAddress(s),
 		LatestID: 0,
 		Rumors:   map[uint32]RumorMessage{},
 	}
