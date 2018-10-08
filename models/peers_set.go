@@ -13,102 +13,160 @@ type PeersSet struct {
 	mux      sync.Mutex
 }
 
-func (peers *PeersSet) String() string {
-	return fmt.Sprint(*peers)
-}
-
-func (peers *PeersSet) Set(value string) error {
-	if peers.peersMap == nil {
-		peers.init()
+func NewPeersSet(peers ...*Peer) *PeersSet {
+	newPeersSet := &PeersSet{}
+	newPeersSet.init()
+	for _, p := range peers {
+		newPeersSet.addPeer(p)
 	}
-
-	for _, ipPort := range strings.Split(value, ",") {
-		peers.AddIpPort(ipPort)
-	}
-	return nil
+	return newPeersSet
 }
 
-func (peers *PeersSet) ToStrings() []string {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
-
-	ls := []string{}
-	for _, p := range peers.peersMap {
-		ls = append(ls, p.Addr.ToIpPort())
-	}
-	return ls
-}
-
-func (peers PeersSet) ToString(sep string) string {
-	return strings.Join(peers.ToStrings(), sep)
-}
-
-func (peers *PeersSet) AddIpPort(ipPort string) {
-	peers.AddPeer(NewPeer(ipPort))
-}
-
-func (peers *PeersSet) AddPeer(peer *Peer) {
-	if peers.peersMap == nil {
-		peers.init()
-	}
-
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
-	peers.peersMap[peer.Addr.ToIpPort()] = peer
-}
-
-func (peers *PeersSet) GetSlice() []*Peer {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
-
-	peersList := []*Peer{}
-	for _, p := range peers.peersMap {
-		peersList = append(peersList, p)
-	}
-	return peersList
-}
-
-func (peers *PeersSet) Filter(peer *Peer) *PeersSet {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
-
-	peersMap := make(map[string]*Peer)
-	for ipPort, p := range peers.peersMap {
-		if ipPort != peer.Addr.ToIpPort() {
-			peersMap[ipPort] = p
-		}
-	}
-	return &PeersSet{
-		peersMap: peersMap,
-	}
-}
-
-func (peers *PeersSet) init() {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
-
-	if peers.peersMap == nil {
-		peers.peersMap = make(map[string]*Peer)
+func (peersSet *PeersSet) init() {
+	if peersSet.peersMap == nil {
+		peersSet.peersMap = make(map[string]*Peer)
 	} else {
 		common.HandleError(fmt.Errorf("PeersSet already initialized"))
 	}
 }
 
-func (peers *PeersSet) GetRandom() *Peer {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
+func (peersSet *PeersSet) string() string {
+	return fmt.Sprintf("PEERS %s", peersSet.toString(","))
+}
 
-	idx := rand.Int() % len(peers.peersMap)
-	return peers.GetSlice()[idx]
+func (peersSet PeersSet) String() string {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.string()
+}
+
+func (peersSet *PeersSet) Set(s string) error {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	if peersSet.peersMap == nil {
+		peersSet.init()
+	}
+
+	for _, ipPort := range strings.Split(s, ",") {
+		peersSet.addIpPort(ipPort)
+	}
+	return nil
+}
+
+func (peersSet *PeersSet) toStrings() []string {
+	ls := []string{}
+	for _, p := range peersSet.peersMap {
+		ls = append(ls, p.Addr.ToIpPort())
+	}
+	return ls
+}
+
+func (peersSet *PeersSet) ToStrings() []string {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.toStrings()
+}
+
+func (peersSet PeersSet) toString(sep string) string {
+	return strings.Join(peersSet.toStrings(), sep)
+}
+
+
+func (peersSet PeersSet) ToString(sep string) string {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.toString(sep)
+}
+
+func (peersSet *PeersSet) addIpPort(ipPort string) {
+	peersSet.addPeer(NewPeer(ipPort))
+}
+
+func (peersSet *PeersSet) AddIpPort(ipPort string) {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	peersSet.addIpPort(ipPort)
+}
+
+func (peersSet *PeersSet) addPeer(peer *Peer) {
+	if peersSet.peersMap == nil {
+		peersSet.init()
+	}
+	_, ok := peersSet.peersMap[peer.ID()]
+	if ok {
+		// not overwriting if peer already present
+		common.HandleError(fmt.Errorf("adding a Peer that is already in PeerSet"))
+	} else {
+		peersSet.peersMap[peer.ID()] = peer
+	}
+}
+
+func (peersSet *PeersSet) AddPeer(peer *Peer) {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+	peersSet.addPeer(peer)
+}
+
+func (peersSet *PeersSet) getSlice() []*Peer {
+	peersList := []*Peer{}
+	for _, p := range peersSet.peersMap {
+		peersList = append(peersList, p)
+	}
+	return peersList
+}
+
+func (peersSet *PeersSet) GetSlice() []*Peer {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.getSlice()
+}
+
+
+func (peersSet *PeersSet) filter(peer ...*Peer) *PeersSet {
+	newPeersSet := NewPeersSet()
+	for _, p := range peersSet.peersMap {
+		isNotFiltered := true
+		for _, filteredPeer := range peer {
+			if p.ID() == filteredPeer.ID() {
+				isNotFiltered = false
+				break
+			}
+		}
+		if isNotFiltered {
+			newPeersSet.addPeer(p)
+		}
+	}
+	return newPeersSet
+}
+
+func (peersSet *PeersSet) Filter(peer ...*Peer) *PeersSet {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.filter(peer...)
+}
+
+func (peersSet *PeersSet) GetRandom() *Peer {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	idx := rand.Int() % len(peersSet.peersMap)
+	return peersSet.getSlice()[idx]
 
 }
 
-func (peers *PeersSet) ToStatusPacket() *StatusPacket {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
+func (peersSet *PeersSet) ToStatusPacket() *StatusPacket {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
 
 	want := []PeerStatus{}
-	for _, p := range peers.peersMap {
+	for _, p := range peersSet.peersMap {
 		want = append(want, *p.ToPeerStatus())
 	}
 	return &StatusPacket{
@@ -116,42 +174,116 @@ func (peers *PeersSet) ToStatusPacket() *StatusPacket {
 	}
 }
 
+/*
 func (peers *PeersSet) SaveRumor(msg *RumorMessage, fromPeer *Peer) {
 	peers.mux.Lock()
 	defer peers.mux.Unlock()
 
 	peer := peers.peersMap[fromPeer.ID()]
-	peer.SaveRumor(*msg)
+	peer.SaveRumor(msg)
 }
+*/
 
-func (peers *PeersSet) AckPrint() {
-	if peers.NonEmpty() {
-		fmt.Printf("PEERS %s\n", peers.ToString(","))
+func (peersSet *PeersSet) AckPrint(filterMe *Peer) {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	filteredPeerSet := peersSet.filter(filterMe)
+	if filteredPeerSet.nonEmpty() {
+		fmt.Println(filteredPeerSet.string())
 	}
 }
 
-func (peers *PeersSet) IsEmpty() bool {
-	return len(peers.peersMap) == 0
+func (peersSet *PeersSet) isEmpty() bool {
+	return len(peersSet.peersMap) == 0
 }
 
-func (peers *PeersSet) NonEmpty() bool {
-	return !peers.IsEmpty()
+func (peersSet *PeersSet) IsEmpty() bool {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+	return peersSet.isEmpty()
 }
 
-func (peers *PeersSet) Extend(other *PeersSet) {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
+func (peersSet *PeersSet) nonEmpty() bool {
+	return !peersSet.isEmpty()
+}
+
+func (peersSet *PeersSet) NonEmpty() bool {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.nonEmpty()
+}
+
+func (peersSet *PeersSet) Extend(other *PeersSet) {
+	peersSet.mux.Lock()
+	other.mux.Lock()
+	defer peersSet.mux.Unlock()
+	defer other.mux.Unlock()
 
 	for k, v := range other.peersMap {
-		peers.peersMap[k] = v
+		peersSet.peersMap[k] = v
 	}
 }
 
-func (peers *PeersSet) Union(other *PeersSet) PeersSet {
-	var newPeersSet PeersSet
-	newPeersSet.init()
-	newPeersSet.Extend(peers)
+func (peersSet *PeersSet) Union(other *PeersSet) *PeersSet {
+	newPeersSet := NewPeersSet()
+	newPeersSet.Extend(peersSet)
 	newPeersSet.Extend(other)
-
 	return newPeersSet
+}
+
+func (peersSet *PeersSet) Compare(want []PeerStatus) (*RumorMessage, bool) {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	msgToSend := []*RumorMessage{}
+	remoteHasMsg := false
+
+	for _, ps := range want {
+		peer, ok := peersSet.peersMap[ps.Identifier]
+		if ok && peer.LatestID >= ps.NextID {
+			msgToSend = append(msgToSend, peer.Rumors[ps.NextID])
+		} else if ok && peer.LatestID < ps.NextID - 1 {
+			remoteHasMsg = true
+		}
+	}
+
+	var randomMsg *RumorMessage = nil
+	if len(msgToSend) > 0 {
+		randomMsg = msgToSend[rand.Int() % len(msgToSend)]
+	}
+	return randomMsg, remoteHasMsg
+}
+
+func (peersSet *PeersSet) get(ipPort string) (*Peer, error) {
+	p, ok := peersSet.peersMap[ipPort]
+	if !ok {
+		return nil, fmt.Errorf("trying to Get a Peer that is not in PeerSet")
+	}
+	return p, nil
+}
+
+func (peersSet *PeersSet) Get(ipPort string) *Peer {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	peer, err := peersSet.get(ipPort)
+	common.HandleError(err)
+	return peer
+}
+
+func (peersSet *PeersSet) GetAndError(ipPort string) (*Peer, error) {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	return peersSet.get(ipPort)
+}
+
+func (peersSet *PeersSet) Has(ipPort string) bool {
+	peersSet.mux.Lock()
+	defer peersSet.mux.Unlock()
+
+	_, ok := peersSet.peersMap[ipPort]
+	return ok
 }

@@ -25,7 +25,7 @@ func init() {
 
 func main() {
 	parse()
-	g := gossiper.NewGossiper(&gossipAddr, name, uiPort, &peers)
+	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, &peers)
 	g.Start()
 }
 

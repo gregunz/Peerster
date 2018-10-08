@@ -21,8 +21,8 @@ func init() {
 func main() {
 	flag.Parse()
 
-	message := models.SimpleMessage{
-		Contents: msg,
+	packet := models.ClientPacket{
+		Message: msg,
 	}
 
 	// port 0 means that os picks on that is available
@@ -30,11 +30,11 @@ func main() {
 
 	udpAddr := utils.IpPortToUDPAddr(fmt.Sprintf("localhost:%d", uiPort))
 
-	sendMessage(udpAddr, udpConn, &message)
+	sendMessage(udpAddr, udpConn, &packet)
 }
 
-func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, message *models.SimpleMessage) {
-	packetBytes, err := protobuf.Encode(&models.GossipPacket{Simple: message})
+func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet *models.ClientPacket) {
+	packetBytes, err := protobuf.Encode(packet)
 	common.HandleError(err)
 	udpConn.WriteToUDP(packetBytes, udpAddr)
 }

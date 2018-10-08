@@ -23,7 +23,7 @@ name='A'
 
 for i in `seq 1 10`;
 do
-	outFileName="$name.out"
+	outFileName="out/$name.out"
 	peerPort=$((($gossipPort+1)%10+5000))
 	peer="127.0.0.1:$peerPort"
 	gossipAddr="127.0.0.1:$gossipPort"
