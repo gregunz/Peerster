@@ -90,6 +90,17 @@ func (g *Gossiper) listenPeers(group *sync.WaitGroup) {
 	})
 }
 
+func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
+	group.Add(1)
+	go func (){
+		defer group.Done()
+		ticker := time.NewTicker(anti_entropy_duration)
+		for range ticker.C {
+			go g.broadcast(g.peersSet.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom(g.Me()))
+		}
+	}()
+}
+
 func (g *Gossiper) listen(conn *net.UDPConn, group *sync.WaitGroup, callback func([]byte, string)) {
 	defer conn.Close()
 	defer group.Done()
@@ -112,6 +123,8 @@ func (g *Gossiper) handleSimple(msg *models.SimpleMessage, fromPeer *models.Peer
 	go g.broadcast(msgToSend.ToGossipPacket(), toPeers...)
 }
 
+
+
 func (g *Gossiper) handleRumor(msg *models.RumorMessage, fromPeer *models.Peer) {
 
 	// saving message
@@ -124,13 +137,12 @@ func (g *Gossiper) handleRumor(msg *models.RumorMessage, fromPeer *models.Peer) 
 	}
 
 	// broadcast to a random peer
-	randomPeer := g.peersSet.GetRandom()
+	randomPeer := g.peersSet.GetRandom(g.Me())
 	go g.broadcast(msgToSend.ToGossipPacket(), randomPeer)
 
 	// send back status packet to sender
 	go g.broadcast(g.peersSet.ToStatusPacket().ToGossipPacket(), fromPeer)
 }
-
 
 
 func (g *Gossiper) handleStatus(packet *models.StatusPacket, fromPeer *models.Peer) {
@@ -148,7 +160,6 @@ func (g *Gossiper) handleStatus(packet *models.StatusPacket, fromPeer *models.Pe
 	// prints
 	packet.AckPrint(fromPeer)
 }
-
 
 func (g *Gossiper) handleClient(packet *models.ClientPacket) {
 	packet.AckPrint()
@@ -172,7 +183,7 @@ func (g *Gossiper) handleClient(packet *models.ClientPacket) {
 
 		mePeer.SaveRumor(rumor)
 
-		randomPeer := g.peersSet.GetRandom()
+		randomPeer := g.peersSet.GetRandom(g.Me())
 		g.broadcast(rumor.ToGossipPacket(), randomPeer)
 	}
 }
@@ -194,17 +205,6 @@ func (g *Gossiper) handlePeers(packet *models.GossipPacket, fromPeer *models.Pee
 
 }
 
-func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
-	group.Add(1)
-	go func (){
-		defer group.Done()
-		ticker := time.NewTicker(anti_entropy_duration)
-		for range ticker.C {
-			go g.broadcast(g.peersSet.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom())
-		}
-	}()
-}
-
 func (g *Gossiper) broadcast(packet *models.GossipPacket, to ...*models.Peer) {
 	common.HandleError(packet.Check())
 	if len(to) == 0 {
@@ -222,7 +222,7 @@ func (g *Gossiper) broadcast(packet *models.GossipPacket, to ...*models.Peer) {
 					packet.Rumor.SendPrint(p, false)
 					p.SetTimeout(timeout_duration, func() {
 						if flipped := utils.FlipCoin(); flipped {
-							randomPeer := g.peersSet.GetRandom()
+							randomPeer := g.peersSet.GetRandom(g.Me())
 							packet.Rumor.SendPrint(randomPeer, flipped)
 							g.broadcast(packet, randomPeer)
 						}

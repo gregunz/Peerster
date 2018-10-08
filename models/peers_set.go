@@ -152,11 +152,12 @@ func (peersSet *PeersSet) Filter(peer ...*Peer) *PeersSet {
 	return peersSet.filter(peer...)
 }
 
-func (peersSet *PeersSet) GetRandom() *Peer {
+func (peersSet *PeersSet) GetRandom(except ...*Peer) *Peer {
 	peersSet.mux.Lock()
 	defer peersSet.mux.Unlock()
 
-	idx := rand.Int() % len(peersSet.peersMap)
+	peersSetCopy := peersSet.filter(except...)
+	idx := rand.Int() % len(peersSetCopy.peersMap)
 	return peersSet.getSlice()[idx]
 
 }
