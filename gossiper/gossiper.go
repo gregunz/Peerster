@@ -15,13 +15,14 @@ var timeout_duration = 1 * time.Second
 var anti_entropy_duration = 1 * time.Second
 
 type Gossiper struct {
-	simple     bool
-	address    *models.Address
-	peerConn   *net.UDPConn
-	clientConn *net.UDPConn
-	name       string
-	peersSet   *models.PeersSet
-	mux        sync.Mutex
+	simple        bool
+	address       *models.Address
+	peerConn      *net.UDPConn
+	clientConn    *net.UDPConn
+	name          string
+	peersSet      *models.PeersSet
+	rumorsHandler *models.RumorHandlers
+	mux           sync.Mutex
 }
 
 func NewGossiper(simple bool, address *models.Address, name string, uiPort uint, peers *models.PeersSet) *Gossiper {
@@ -33,15 +34,14 @@ func NewGossiper(simple bool, address *models.Address, name string, uiPort uint,
 	_, peerConn := utils.ConnectToIpPort(address.ToIpPort())
 	_, clientConn := utils.ConnectToIpPort(fmt.Sprintf("localhost:%d", uiPort))
 
-	peers.AddIpPort(address.ToIpPort())
-
 	return &Gossiper{
-		simple:     simple,
-		address:    address,
-		peerConn:   peerConn,
-		clientConn: clientConn,
-		name:       name,
-		peersSet:   peers,
+		simple:        simple,
+		address:       address,
+		peerConn:      peerConn,
+		clientConn:    clientConn,
+		name:          name,
+		peersSet:      peers,
+		rumorsHandler: models.NewRumorsHandler(),
 	}
 }
 
@@ -96,7 +96,7 @@ func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
 		defer group.Done()
 		ticker := time.NewTicker(anti_entropy_duration)
 		for range ticker.C {
-			go g.broadcast(g.peersSet.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom(g.Me()))
+			go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom())
 		}
 	}()
 }
@@ -128,7 +128,7 @@ func (g *Gossiper) handleSimple(msg *models.SimpleMessage, fromPeer *models.Peer
 func (g *Gossiper) handleRumor(msg *models.RumorMessage, fromPeer *models.Peer) {
 
 	// saving message
-	fromPeer.SaveRumor(msg)
+	g.rumorsHandler.Save(msg)
 
 	msgToSend := &models.RumorMessage{
 		ID: msg.ID,
@@ -136,23 +136,26 @@ func (g *Gossiper) handleRumor(msg *models.RumorMessage, fromPeer *models.Peer) 
 		Origin: msg.Origin,
 	}
 
-	// broadcast to a random peer
-	randomPeer := g.peersSet.GetRandom(g.Me())
-	go g.broadcast(msgToSend.ToGossipPacket(), randomPeer)
+	// broadcast to a random peer TODO: ASK IF WE MUST EXCLUDE fromPeer
+	if randomPeer:= g.peersSet.GetRandom(fromPeer); randomPeer != nil {
+		go g.broadcast(msgToSend.ToGossipPacket(), randomPeer)
+		msgToSend.SendPrint(randomPeer, false)
+	}
 
 	// send back status packet to sender
-	go g.broadcast(g.peersSet.ToStatusPacket().ToGossipPacket(), fromPeer)
+	go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer)
 }
 
 
 func (g *Gossiper) handleStatus(packet *models.StatusPacket, fromPeer *models.Peer) {
 	fromPeer.StopTimeout()
-	msg, remoteHasMsg := g.peersSet.Compare(packet.Want)
+	rumorMsg, remoteHasMsg := g.rumorsHandler.Compare(packet.Want)
 
-	if msg != nil { // has a msg to send
-		go g.broadcast(msg.ToGossipPacket(), fromPeer) // send the new message
+	if rumorMsg != nil { // has a msg to send
+		go g.broadcast(rumorMsg.ToGossipPacket(), fromPeer) // send the new message
+		rumorMsg.SendPrint(fromPeer, false)
 	} else if remoteHasMsg { // remote has new message //TODO: check if both cannot happen (else if)
-		go g.broadcast(g.peersSet.ToStatusPacket().ToGossipPacket(), fromPeer) // send status to remote
+		go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer) // send status to remote
 	} else  { // is up to date
 		fromPeer.TriggerTimeout()
 		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
@@ -174,16 +177,10 @@ func (g *Gossiper) handleClient(packet *models.ClientPacket) {
 		g.mux.Lock()
 		defer g.mux.Unlock()
 
-		mePeer := g.Me()
-		rumor := &models.RumorMessage{
-			Origin: g.name,
-			ID:     mePeer.LatestID + 1,
-			Text:   packet.Message,
-		}
+		meHandler := g.rumorsHandler.GetOrCreateHandler(g.name)
+		rumor := meHandler.NextMessage(packet.Message)
 
-		mePeer.SaveRumor(rumor)
-
-		randomPeer := g.peersSet.GetRandom(g.Me())
+		randomPeer := g.peersSet.GetRandom()
 		g.broadcast(rumor.ToGossipPacket(), randomPeer)
 	}
 }
@@ -191,7 +188,7 @@ func (g *Gossiper) handleClient(packet *models.ClientPacket) {
 func (g *Gossiper) handlePeers(packet *models.GossipPacket, fromPeer *models.Peer) {
 
 	packet.AckPrint(fromPeer)
-	g.peersSet.AckPrint(g.Me())
+	g.peersSet.AckPrint()
 
 	if packet.Simple != nil {
 		g.handleSimple(packet.Simple, fromPeer)
@@ -213,27 +210,30 @@ func (g *Gossiper) broadcast(packet *models.GossipPacket, to ...*models.Peer) {
 	packetBytes, err := protobuf.Encode(packet)
 	common.HandleError(err)
 
-
-
 	for _, p := range to {
 		go func(p *models.Peer) {
-			if !p.Equals(g.Me()) {
+			if p != nil && !p.Addr.Equals(g.address) {
 				if packet.IsRumor() {
-					packet.Rumor.SendPrint(p, false)
 					p.SetTimeout(timeout_duration, func() {
 						if flipped := utils.FlipCoin(); flipped {
-							randomPeer := g.peersSet.GetRandom(g.Me())
-							packet.Rumor.SendPrint(randomPeer, flipped)
+							randomPeer := g.peersSet.GetRandom()
 							g.broadcast(packet, randomPeer)
+							packet.Rumor.SendPrint(randomPeer, flipped)
 						}
 					})
 				}
 				g.peerConn.WriteToUDP(packetBytes, p.Addr.UDP())
+			} else {
+				if p == nil {
+					common.HandleError(fmt.Errorf("tried to broadcast to peer '%s'", p))
+				}
 			}
 		}(p)
 	}
 }
 
-func (g *Gossiper) Me() *models.Peer {
-	return g.peersSet.Get(g.address.ToIpPort())
+/*
+func (g *Gossiper) SaveRumor(msg *models.RumorMessage) {
+	g.rumorsHandler.Save(msg)
 }
+*/

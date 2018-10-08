@@ -157,41 +157,19 @@ func (peersSet *PeersSet) GetRandom(except ...*Peer) *Peer {
 	defer peersSet.mux.Unlock()
 
 	peersSetCopy := peersSet.filter(except...)
-	idx := rand.Int() % len(peersSetCopy.peersMap)
-	return peersSet.getSlice()[idx]
-
+	if len(peersSetCopy.peersMap) > 0 {
+		idx := rand.Int() % len(peersSetCopy.peersMap)
+		return peersSetCopy.getSlice()[idx]
+	}
+	return nil
 }
 
-func (peersSet *PeersSet) ToStatusPacket() *StatusPacket {
+func (peersSet *PeersSet) AckPrint() {
 	peersSet.mux.Lock()
 	defer peersSet.mux.Unlock()
 
-	want := []PeerStatus{}
-	for _, p := range peersSet.peersMap {
-		want = append(want, *p.ToPeerStatus())
-	}
-	return &StatusPacket{
-		Want: want,
-	}
-}
-
-/*
-func (peers *PeersSet) SaveRumor(msg *RumorMessage, fromPeer *Peer) {
-	peers.mux.Lock()
-	defer peers.mux.Unlock()
-
-	peer := peers.peersMap[fromPeer.ID()]
-	peer.SaveRumor(msg)
-}
-*/
-
-func (peersSet *PeersSet) AckPrint(filterMe *Peer) {
-	peersSet.mux.Lock()
-	defer peersSet.mux.Unlock()
-
-	filteredPeerSet := peersSet.filter(filterMe)
-	if filteredPeerSet.nonEmpty() {
-		fmt.Println(filteredPeerSet.string())
+	if peersSet.nonEmpty() {
+		fmt.Println(peersSet.string())
 	}
 }
 
@@ -232,29 +210,6 @@ func (peersSet *PeersSet) Union(other *PeersSet) *PeersSet {
 	newPeersSet.Extend(peersSet)
 	newPeersSet.Extend(other)
 	return newPeersSet
-}
-
-func (peersSet *PeersSet) Compare(want []PeerStatus) (*RumorMessage, bool) {
-	peersSet.mux.Lock()
-	defer peersSet.mux.Unlock()
-
-	msgToSend := []*RumorMessage{}
-	remoteHasMsg := false
-
-	for _, ps := range want {
-		peer, ok := peersSet.peersMap[ps.Identifier]
-		if ok && peer.LatestID >= ps.NextID {
-			msgToSend = append(msgToSend, peer.Rumors[ps.NextID])
-		} else if ok && peer.LatestID < ps.NextID - 1 {
-			remoteHasMsg = true
-		}
-	}
-
-	var randomMsg *RumorMessage = nil
-	if len(msgToSend) > 0 {
-		randomMsg = msgToSend[rand.Int() % len(msgToSend)]
-	}
-	return randomMsg, remoteHasMsg
 }
 
 func (peersSet *PeersSet) get(ipPort string) (*Peer, error) {
