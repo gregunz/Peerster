@@ -23,7 +23,7 @@ type Gossiper struct {
 	clientConn    *net.UDPConn
 	name          string
 	peersSet      *peers.PeersSet
-	rumorsHandler *rumors.RumorHandlers
+	rumorsHandler *rumors.VectorClock
 	mux           sync.Mutex
 }
 
@@ -36,6 +36,10 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 	_, peerConn := utils.ConnectToIpPort(address.ToIpPort())
 	_, clientConn := utils.ConnectToIpPort(fmt.Sprintf("localhost:%d", uiPort))
 
+	/*if peerConn == nil || clientConn == nil {
+		common.HandleAbort("could not connect to ")
+	}*/
+
 	return &Gossiper{
 		simple:        simple,
 		address:       address,
@@ -43,7 +47,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		clientConn:    clientConn,
 		name:          name,
 		peersSet:      peers,
-		rumorsHandler: rumors.NewRumorsHandler(name),
+		rumorsHandler: rumors.NewVectorClock(name),
 	}
 }
 
@@ -112,7 +116,7 @@ func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
 		defer group.Done()
 		ticker := time.NewTicker(anti_entropy_duration)
 		for range ticker.C {
-			go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom())
+			go g.sendPacket(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom())
 		}
 	}()
 }
@@ -125,7 +129,7 @@ func (g *Gossiper) handleSimple(msg *packets.SimpleMessage, fromPeer *peers.Peer
 	}
 	toPeers := g.peersSet.Filter(fromPeer).GetSlice() // not resending to sender
 
-	go g.broadcast(msgToSend.ToGossipPacket(), toPeers...)
+	go g.sendPacket(msgToSend.ToGossipPacket(), toPeers...)
 }
 
 func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) {
@@ -139,26 +143,26 @@ func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) 
 		Origin: msg.Origin,
 	}
 
-	// broadcast to a random peer TODO: ASK IF WE MUST EXCLUDE fromPeer
+	// sendPacket to a random peer TODO: ASK IF WE MUST EXCLUDE fromPeer
 	if randomPeer := g.peersSet.GetRandom(fromPeer); randomPeer != nil {
-		go g.broadcast(msgToSend.ToGossipPacket(), randomPeer)
-		msgToSend.SendPrint(randomPeer, false)
+		go g.sendPacket(msgToSend.ToGossipPacket(), randomPeer)
 	}
 
 	// send back status packet to sender (= ack of the rumor)
-	go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer)
+	go g.sendPacket(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer)
 }
 
 func (g *Gossiper) handleStatus(packet *packets.StatusPacket, fromPeer *peers.Peer) {
-	fromPeer.ResetTimeout()
-	rumorMsg, remoteHasMsg := g.rumorsHandler.Compare(packet.Want)
+	fromPeer.StopTimeout()
+	rumorMsg, remoteHasMsg := g.rumorsHandler.Compare(packet.ToMap())
 
 	if rumorMsg != nil { // has a msg to send
-		go g.broadcast(rumorMsg.ToGossipPacket(), fromPeer) // send the new message
-		rumorMsg.SendPrint(fromPeer, false)
-	} else if remoteHasMsg { // remote has new message //TODO: check if both cannot happen (else if)
-		go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer) // send status to remote
-	} else { // is up to date
+		go g.sendPacket(rumorMsg.ToGossipPacket(), fromPeer) // send the new message
+	}
+	if remoteHasMsg { // remote has new message //TODO: check if both cannot happen (else if)
+		go g.sendPacket(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer) // send status to remote
+	}
+	if rumorMsg == nil && !remoteHasMsg { // is up to date
 		fromPeer.TriggerTimeout()
 		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
 	}
@@ -172,7 +176,7 @@ func (g *Gossiper) handleClient(packet *packets.ClientPacket) {
 			RelayPeerAddr: g.address.ToIpPort(),
 			OriginalName:  g.name,
 		}
-		g.broadcast(msg.ToGossipPacket(), g.peersSet.GetSlice()...)
+		g.sendPacket(msg.ToGossipPacket(), g.peersSet.GetSlice()...)
 	} else {
 		g.mux.Lock()
 		defer g.mux.Unlock()
@@ -181,7 +185,8 @@ func (g *Gossiper) handleClient(packet *packets.ClientPacket) {
 		rumor := meHandler.NextMessage(packet.Message)
 
 		randomPeer := g.peersSet.GetRandom()
-		g.broadcast(rumor.ToGossipPacket(), randomPeer)
+		g.sendPacket(rumor.ToGossipPacket(), randomPeer)
+
 	}
 }
 
@@ -202,13 +207,13 @@ func (g *Gossiper) handlePeers(packet *packets.GossipPacket, fromPeer *peers.Pee
 
 }
 
-func (g *Gossiper) broadcast(packet *packets.GossipPacket, to ...*peers.Peer) {
+func (g *Gossiper) sendPacket(packet *packets.GossipPacket, to ...*peers.Peer) {
 	if err := packet.Check(); err != nil {
-		common.HandleAbort(fmt.Sprintf("cannot broadcast incorrect packet"), err)
+		common.HandleAbort(fmt.Sprintf("cannot sendPacket incorrect packet"), err)
 		return
 	}
 	if len(to) == 0 {
-		common.HandleAbort(fmt.Sprintf("cannot broadcast to zero peers"), nil)
+		common.HandleAbort(fmt.Sprintf("cannot sendPacket to zero peers"), nil)
 		return
 	}
 	packetBytes, err := protobuf.Encode(packet)
@@ -220,25 +225,32 @@ func (g *Gossiper) broadcast(packet *packets.GossipPacket, to ...*peers.Peer) {
 	for _, p := range to {
 		go func(p *peers.Peer) {
 			if p != nil && !p.Addr.Equals(g.address) {
-				if packet.IsRumor() {
-					p.SetTimeout(timeout_duration, func() {
-						if flipped := utils.FlipCoin(); flipped {
-							randomPeer := g.peersSet.GetRandom(p)
-							if randomPeer != nil {
-								g.broadcast(packet, randomPeer)
-								packet.Rumor.SendPrint(randomPeer, flipped)
-							}
-						}
-					})
-				}
+				g.handleSendPackets(packet, p)
 				g.peerConn.WriteToUDP(packetBytes, p.Addr.UDP())
 			} else {
-				//if p == nil {
-				common.HandleError(fmt.Errorf("tried to broadcast to peer '%s'", p))
-				//}
+				//common.HandleError(fmt.Errorf("tried to sendPacket to peer '%s'", p))
 			}
 		}(p)
 	}
+}
+
+func (g *Gossiper) handleSendPackets(packet *packets.GossipPacket, toPeer *peers.Peer) {
+
+	if packet.IsRumor() {
+		packet.Rumor.SendPrintMongering(toPeer)
+
+		// start timeout to this peer
+		toPeer.SetOrResetTimeout(timeout_duration, func() {
+			if flipped := utils.FlipCoin(); flipped {
+				if randomPeer := g.peersSet.GetRandom(toPeer); randomPeer != nil {
+					g.sendPacket(packet, randomPeer)
+					packet.Rumor.SendPrintFlipped(randomPeer)
+				}
+			}
+		})
+
+	}
+
 }
 
 /*

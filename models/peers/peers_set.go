@@ -96,6 +96,10 @@ func (peersSet *PeersSet) addPeer(peer *Peer) {
 	if peersSet.peersMap == nil {
 		peersSet.init()
 	}
+	if peer == nil {
+		common.HandleAbort("not adding nil to PeerSet", nil)
+		return
+	}
 	_, ok := peersSet.peersMap[peer.ID()]
 	if ok {
 		// not overwriting if peer already present

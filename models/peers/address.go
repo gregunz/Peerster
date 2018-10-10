@@ -13,8 +13,9 @@ type Address struct {
 
 func (addr *Address) ToIpPort() string {
 	if addr.IsEmpty() {
-		common.HandleError(fmt.Errorf("cannot return <ip:port> of a nil address"))
-		return ""
+		common.HandleError(fmt.Errorf(
+			"cannot return <ip:port> of a nil address, returning empty string"))
+		return "<nil>"
 	}
 	return fmt.Sprintf("%s:%d", addr.udpAddr.IP, addr.udpAddr.Port)
 }
@@ -47,4 +48,8 @@ func NewAddress(ipPort string) *Address {
 
 func (addr *Address) IsEmpty() bool {
 	return addr.udpAddr == nil
+}
+
+func (addr *Address) NonEmpty() bool {
+	return !addr.IsEmpty()
 }

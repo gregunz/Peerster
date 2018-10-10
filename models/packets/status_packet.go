@@ -34,3 +34,11 @@ func (packet *StatusPacket) wantString() []string {
 	}
 	return ls
 }
+
+func (packet *StatusPacket) ToMap() map[string]uint32 {
+	statusMap := map[string]uint32{}
+	for _, ps := range packet.Want {
+		statusMap[ps.Identifier] = ps.NextID
+	}
+	return statusMap
+}

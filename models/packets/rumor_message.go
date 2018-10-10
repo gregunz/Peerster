@@ -16,12 +16,12 @@ func (msg *RumorMessage) AckPrint(fromPeer *peers.Peer) {
 		msg.Origin, fromPeer.Addr.ToIpPort(), msg.ID, msg.Text)
 }
 
-func (msg *RumorMessage) SendPrint(toPeer *peers.Peer, flipped bool) {
-	if flipped {
-		fmt.Printf("FLIPPED COIN sending rumor to %s\n", toPeer.Addr.ToIpPort())
-	} else {
-		fmt.Printf("MONGERING with %s\n", toPeer.Addr.ToIpPort())
-	}
+func (msg *RumorMessage) SendPrintMongering(toPeer *peers.Peer) {
+	fmt.Printf("MONGERING with %s\n", toPeer.Addr.ToIpPort())
+}
+
+func (msg *RumorMessage) SendPrintFlipped(toPeer *peers.Peer) {
+	fmt.Printf("FLIPPED COIN sending rumor to %s\n", toPeer.Addr.ToIpPort())
 }
 
 func (msg *RumorMessage) ToGossipPacket() *GossipPacket {
