@@ -1,7 +1,8 @@
-package models
+package packets
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/models/peers"
 	"strings"
 )
 
@@ -9,7 +10,7 @@ type StatusPacket struct {
 	Want []PeerStatus
 }
 
-func (packet *StatusPacket) AckPrint(fromPeer *Peer) {
+func (packet *StatusPacket) AckPrint(fromPeer *peers.Peer) {
 	ls := packet.wantString()
 	fmt.Printf("STATUS from %s %s\n",
 		fromPeer.Addr.ToIpPort(), strings.Join(ls, " "))

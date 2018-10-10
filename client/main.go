@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/dedis/protobuf"
 	"github.com/gregunz/Peerster/common"
-	"github.com/gregunz/Peerster/models"
+	"github.com/gregunz/Peerster/models/packets"
 	"github.com/gregunz/Peerster/utils"
 	"net"
 )
@@ -21,7 +21,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	packet := models.ClientPacket{
+	packet := packets.ClientPacket{
 		Message: msg,
 	}
 
@@ -33,7 +33,7 @@ func main() {
 	sendMessage(udpAddr, udpConn, &packet)
 }
 
-func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet *models.ClientPacket) {
+func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet *packets.ClientPacket) {
 	packetBytes, err := protobuf.Encode(packet)
 	common.HandleError(err)
 	udpConn.WriteToUDP(packetBytes, udpAddr)

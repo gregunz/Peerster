@@ -1,7 +1,8 @@
-package models
+package packets
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/models/peers"
 )
 
 type RumorMessage struct {
@@ -10,12 +11,12 @@ type RumorMessage struct {
 	Text   string
 }
 
-func (msg *RumorMessage) AckPrint(fromPeer *Peer) {
+func (msg *RumorMessage) AckPrint(fromPeer *peers.Peer) {
 	fmt.Printf("RUMOR origin %s from %s ID %d contents %s\n",
 		msg.Origin, fromPeer.Addr.ToIpPort(), msg.ID, msg.Text)
 }
 
-func (msg *RumorMessage) SendPrint(toPeer *Peer, flipped bool) {
+func (msg *RumorMessage) SendPrint(toPeer *peers.Peer, flipped bool) {
 	if flipped {
 		fmt.Printf("FLIPPED COIN sending rumor to %s\n", toPeer.Addr.ToIpPort())
 	} else {

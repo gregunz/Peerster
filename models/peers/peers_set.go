@@ -1,4 +1,4 @@
-package models
+package peers
 
 import (
 	"fmt"
@@ -74,7 +74,6 @@ func (peersSet PeersSet) toString(sep string) string {
 	return strings.Join(peersSet.toStrings(), sep)
 }
 
-
 func (peersSet PeersSet) ToString(sep string) string {
 	peersSet.mux.Lock()
 	defer peersSet.mux.Unlock()
@@ -126,7 +125,6 @@ func (peersSet *PeersSet) GetSlice() []*Peer {
 
 	return peersSet.getSlice()
 }
-
 
 func (peersSet *PeersSet) filter(peer ...*Peer) *PeersSet {
 	newPeersSet := NewPeersSet()

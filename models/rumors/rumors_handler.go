@@ -1,6 +1,7 @@
-package models
+package rumors
 
 import (
+	"github.com/gregunz/Peerster/models/packets"
 	"math/rand"
 	"sync"
 )
@@ -17,16 +18,15 @@ func NewRumorsHandler() *RumorHandlers {
 	}
 }
 
-
-func (handlers *RumorHandlers) ToStatusPacket() *StatusPacket {
+func (handlers *RumorHandlers) ToStatusPacket() *packets.StatusPacket {
 	handlers.mux.Lock()
 	defer handlers.mux.Unlock()
 
-	want := []PeerStatus{}
+	want := []packets.PeerStatus{}
 	for _, h := range handlers.handlers {
 		want = append(want, *h.ToPeerStatus())
 	}
-	return &StatusPacket{
+	return &packets.StatusPacket{
 		Want: want,
 	}
 }
@@ -46,29 +46,29 @@ func (handlers *RumorHandlers) GetOrCreateHandler(origin string) *rumorHandler {
 	return handlers.getOrCreateHandler(origin)
 }
 
-func (handlers *RumorHandlers) Save(msg *RumorMessage) {
+func (handlers *RumorHandlers) Save(msg *packets.RumorMessage) {
 	h := handlers.getOrCreateHandler(msg.Origin)
 	h.Save(msg)
 }
 
-func (handlers *RumorHandlers) Compare(want []PeerStatus) (*RumorMessage, bool) {
+func (handlers *RumorHandlers) Compare(want []packets.PeerStatus) (*packets.RumorMessage, bool) {
 	handlers.mux.Lock()
 	defer handlers.mux.Unlock()
 
-	msgToSend := []*RumorMessage{}
+	msgToSend := []*packets.RumorMessage{}
 	remoteHasMsg := false
 
 	for _, ps := range want {
 		handler := handlers.getOrCreateHandler(ps.Identifier)
 		if handler.latestID >= ps.NextID {
 			msgToSend = append(msgToSend, handler.messages[ps.NextID])
-		} else if handler.latestID < ps.NextID - 1 {
+		} else if handler.latestID < ps.NextID-1 {
 			remoteHasMsg = true
 		}
 	}
 
 	if len(msgToSend) > 0 {
-		return msgToSend[rand.Int() % len(msgToSend)], remoteHasMsg
+		return msgToSend[rand.Int()%len(msgToSend)], remoteHasMsg
 	}
 	return nil, remoteHasMsg
 }

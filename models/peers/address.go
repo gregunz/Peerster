@@ -1,4 +1,4 @@
-package models
+package peers
 
 import (
 	"fmt"

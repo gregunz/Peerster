@@ -1,8 +1,9 @@
-package models
+package packets
 
 import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/models/peers"
 	"strings"
 )
 
@@ -63,7 +64,7 @@ func (packet GossipPacket) String() string {
 	return strings.Join(ls, " + ")
 }
 
-func (packet *GossipPacket) AckPrint(fromPeer *Peer) {
+func (packet *GossipPacket) AckPrint(fromPeer *peers.Peer) {
 	if packet.IsSimple() {
 		packet.Simple.AckPrint()
 	}

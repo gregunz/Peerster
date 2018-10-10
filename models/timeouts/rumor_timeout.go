@@ -1,4 +1,4 @@
-package models
+package timeouts
 
 import (
 	"sync"
@@ -9,7 +9,7 @@ type RumorTimeout struct {
 	ticker   *time.Ticker
 	duration time.Duration
 	callback func()
-	mux sync.Mutex
+	mux      sync.Mutex
 }
 
 func NewRumorTimeout(d time.Duration, callback func()) *RumorTimeout {
@@ -51,4 +51,3 @@ func (timeout *RumorTimeout) Stop() {
 
 	timeout.ticker.Stop()
 }
-
