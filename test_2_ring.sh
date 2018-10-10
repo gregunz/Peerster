@@ -27,7 +27,7 @@ name='A'
 
 for i in `seq 1 10`;
 do
-	outFileName="out/$name.out"
+	outFileName="out/out2/$name.out"
 	peerPort=$((($gossipPort+1)%10+5000))
 	peer="127.0.0.1:$peerPort"
 	gossipAddr="127.0.0.1:$gossipPort"
@@ -58,23 +58,23 @@ failed="F"
 
 echo -e "${RED}###CHECK that client messages arrived${NC}"
 
-if !(grep -q "CLIENT MESSAGE $message_c1_1" "out/E.out") ; then
+if !(grep -q "CLIENT MESSAGE $message_c1_1" "out/out2/E.out") ; then
 	failed="T"
 fi
 
-if !(grep -q "CLIENT MESSAGE $message_c1_2" "out/E.out") ; then
+if !(grep -q "CLIENT MESSAGE $message_c1_2" "out/out2/E.out") ; then
 	failed="T"
 fi
 
-if !(grep -q "CLIENT MESSAGE $message_c2_1" "out/B.out") ; then
+if !(grep -q "CLIENT MESSAGE $message_c2_1" "out/out2/B.out") ; then
     failed="T"
 fi
 
-if !(grep -q "CLIENT MESSAGE $message_c2_2" "out/B.out") ; then
+if !(grep -q "CLIENT MESSAGE $message_c2_2" "out/out2/B.out") ; then
     failed="T"
 fi
 
-if !(grep -q "CLIENT MESSAGE $message_c3" "out/G.out") ; then
+if !(grep -q "CLIENT MESSAGE $message_c3" "out/out2/G.out") ; then
     failed="T"
 fi
 

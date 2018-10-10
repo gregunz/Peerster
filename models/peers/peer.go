@@ -46,6 +46,7 @@ func (p *Peer) TriggerTimeout() {
 
 	if p.timeout != nil {
 		p.timeout.Trigger()
+		p.timeout = nil
 	} else {
 		//common.HandleError(fmt.Errorf("Trigger called on nil timeout"))
 	}

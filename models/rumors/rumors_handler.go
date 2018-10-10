@@ -7,13 +7,15 @@ import (
 )
 
 type RumorHandlers struct {
+	myOrigin string
 	handlers map[string]*rumorHandler
 	mux      sync.Mutex
 }
 
-func NewRumorsHandler() *RumorHandlers {
+func NewRumorsHandler(myOrigin string) *RumorHandlers {
 	handlers := map[string]*rumorHandler{}
 	return &RumorHandlers{
+		myOrigin: myOrigin,
 		handlers: handlers,
 	}
 }
@@ -24,7 +26,9 @@ func (handlers *RumorHandlers) ToStatusPacket() *packets.StatusPacket {
 
 	want := []packets.PeerStatus{}
 	for _, h := range handlers.handlers {
-		want = append(want, *h.ToPeerStatus())
+		if h.origin != handlers.myOrigin {
+			want = append(want, *h.ToPeerStatus())
+		}
 	}
 	return &packets.StatusPacket{
 		Want: want,

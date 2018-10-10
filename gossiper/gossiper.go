@@ -43,7 +43,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		clientConn:    clientConn,
 		name:          name,
 		peersSet:      peers,
-		rumorsHandler: rumors.NewRumorsHandler(),
+		rumorsHandler: rumors.NewRumorsHandler(name),
 	}
 }
 
@@ -85,22 +85,14 @@ func (g *Gossiper) listenPeers(group *sync.WaitGroup) {
 	go g.listen(g.peerConn, group, func(buffer []byte, fromIpPort string) {
 		var packet packets.GossipPacket
 		protobuf.Decode(buffer, &packet)
-		common.HandleError(packet.Check())
+		if err := packet.Check(); err != nil {
+			common.HandleAbort(fmt.Sprintf("received incorrect packet from <%s>", fromIpPort), err)
+			return
+		}
 		go func() {
 			g.handlePeers(&packet, g.getOrAddPeer(fromIpPort))
 		}()
 	})
-}
-
-func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
-	group.Add(1)
-	go func() {
-		defer group.Done()
-		ticker := time.NewTicker(anti_entropy_duration)
-		for range ticker.C {
-			go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom())
-		}
-	}()
 }
 
 func (g *Gossiper) listen(conn *net.UDPConn, group *sync.WaitGroup, callback func([]byte, string)) {
@@ -112,6 +104,17 @@ func (g *Gossiper) listen(conn *net.UDPConn, group *sync.WaitGroup, callback fun
 		common.HandleError(err)
 		callback(buffer[:n], udpAddr.String())
 	}
+}
+
+func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
+	group.Add(1)
+	go func() {
+		defer group.Done()
+		ticker := time.NewTicker(anti_entropy_duration)
+		for range ticker.C {
+			go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), g.peersSet.GetRandom())
+		}
+	}()
 }
 
 func (g *Gossiper) handleSimple(msg *packets.SimpleMessage, fromPeer *peers.Peer) {
@@ -142,12 +145,12 @@ func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) 
 		msgToSend.SendPrint(randomPeer, false)
 	}
 
-	// send back status packet to sender
+	// send back status packet to sender (= ack of the rumor)
 	go g.broadcast(g.rumorsHandler.ToStatusPacket().ToGossipPacket(), fromPeer)
 }
 
 func (g *Gossiper) handleStatus(packet *packets.StatusPacket, fromPeer *peers.Peer) {
-	fromPeer.StopTimeout()
+	fromPeer.ResetTimeout()
 	rumorMsg, remoteHasMsg := g.rumorsHandler.Compare(packet.Want)
 
 	if rumorMsg != nil { // has a msg to send
@@ -159,8 +162,6 @@ func (g *Gossiper) handleStatus(packet *packets.StatusPacket, fromPeer *peers.Pe
 		fromPeer.TriggerTimeout()
 		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
 	}
-	// prints
-	packet.AckPrint(fromPeer)
 }
 
 func (g *Gossiper) handleClient(packet *packets.ClientPacket) {
@@ -202,12 +203,19 @@ func (g *Gossiper) handlePeers(packet *packets.GossipPacket, fromPeer *peers.Pee
 }
 
 func (g *Gossiper) broadcast(packet *packets.GossipPacket, to ...*peers.Peer) {
-	common.HandleError(packet.Check())
+	if err := packet.Check(); err != nil {
+		common.HandleAbort(fmt.Sprintf("cannot broadcast incorrect packet"), err)
+		return
+	}
 	if len(to) == 0 {
-		common.HandleError(fmt.Errorf("cannot broadcast to zero peers"))
+		common.HandleAbort(fmt.Sprintf("cannot broadcast to zero peers"), nil)
+		return
 	}
 	packetBytes, err := protobuf.Encode(packet)
-	common.HandleError(err)
+	if err != nil {
+		common.HandleAbort(fmt.Sprintf("error during packet encoding"), err)
+		return
+	}
 
 	for _, p := range to {
 		go func(p *peers.Peer) {
@@ -215,17 +223,19 @@ func (g *Gossiper) broadcast(packet *packets.GossipPacket, to ...*peers.Peer) {
 				if packet.IsRumor() {
 					p.SetTimeout(timeout_duration, func() {
 						if flipped := utils.FlipCoin(); flipped {
-							randomPeer := g.peersSet.GetRandom()
-							g.broadcast(packet, randomPeer)
-							packet.Rumor.SendPrint(randomPeer, flipped)
+							randomPeer := g.peersSet.GetRandom(p)
+							if randomPeer != nil {
+								g.broadcast(packet, randomPeer)
+								packet.Rumor.SendPrint(randomPeer, flipped)
+							}
 						}
 					})
 				}
 				g.peerConn.WriteToUDP(packetBytes, p.Addr.UDP())
 			} else {
-				if p == nil {
-					common.HandleError(fmt.Errorf("tried to broadcast to peer '%s'", p))
-				}
+				//if p == nil {
+				common.HandleError(fmt.Errorf("tried to broadcast to peer '%s'", p))
+				//}
 			}
 		}(p)
 	}

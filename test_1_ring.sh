@@ -23,7 +23,7 @@ name='A'
 
 for i in `seq 1 10`;
 do
-	outFileName="out/$name.out"
+	outFileName="out/out1/$name.out"
 	peerPort=$((($gossipPort+1)%10+5000))
 	peer="127.0.0.1:$peerPort"
 	gossipAddr="127.0.0.1:$gossipPort"
@@ -46,11 +46,11 @@ pkill -f Peerster
 #testing
 failed="F"
 
-if !(grep -q "CLIENT MESSAGE $message" "E.out") ; then
+if !(grep -q "CLIENT MESSAGE $message" "out/out1/E.out") ; then
 	failed="T"
 fi
 
-if !(grep -q "CLIENT MESSAGE $message2" "B.out") ; then
+if !(grep -q "CLIENT MESSAGE $message2" "out/out1/B.out") ; then
   failed="T"
 fi
 
