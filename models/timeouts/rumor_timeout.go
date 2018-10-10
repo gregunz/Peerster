@@ -6,74 +6,74 @@ import (
 	"time"
 )
 
-type RumorTimeout struct {
-	ticker    *time.Ticker
-	duration  time.Duration
-	callback  func()
-	triggered bool
-	mux       sync.Mutex
+type Timeout struct {
+	cancelChan  chan interface{}
+	triggerChan chan interface{}
+	active      bool
+	mux         sync.Mutex
 }
 
-func NewRumorTimeout(d time.Duration, callback func()) *RumorTimeout {
-	timeout := &RumorTimeout{
-		duration:  d,
-		callback:  callback,
-		triggered: false,
+func NewTimeout() *Timeout {
+	return &Timeout{
+		cancelChan:  make(chan interface{}, 1),
+		triggerChan: make(chan interface{}, 1),
+		active:      false,
 	}
-	tickerCallback := func() {
-		timeout.mux.Lock()
-		defer timeout.mux.Unlock()
-		fmt.Println("called 2")
-
-		if !timeout.triggered {
-			fmt.Println("called 3")
-
-			timeout.triggered = true
-			callback()
-		}
-	}
-	timeout.ticker = newTicker(d, tickerCallback)
-	return timeout
 }
 
-func newTicker(d time.Duration, callback func()) *time.Ticker {
-	ticker := time.NewTicker(d)
-	go func() {
-		for range ticker.C {
-			func() {
-				fmt.Println("called 1")
-				ticker.Stop()
+func (timeout *Timeout) set(d time.Duration, callback func()) {
+
+	if !timeout.active {
+
+		timeout.active = true
+
+		go func() {
+			defer timeout.mux.Unlock()
+			select {
+			case <-timeout.triggerChan:
+				timeout.mux.Lock()
+				fmt.Println("TRIGGERED")
 				callback()
-			}()
-		}
-	}()
-	return ticker
-}
-
-func (timeout *RumorTimeout) Trigger() {
-	timeout.mux.Lock()
-	defer timeout.mux.Unlock()
-
-	go timeout.callback() //without "go" routine, the lock is not released
-}
-
-/*
-func (timeout *RumorTimeout) ResetIfTriggered() {
-	timeout.mux.Lock()
-	oldTimeout := *timeout
-	defer oldTimeout.mux.Unlock()
-
-	if oldTimeout.triggered {
-		oldTimeout.ticker.Stop()
-		oldTimeout.triggered = false
-		*timeout = *NewRumorTimeout(timeout.duration, timeout.callback)
+			case <-timeout.cancelChan:
+				timeout.mux.Lock()
+				fmt.Println("CANCELLED")
+			case <-time.After(d):
+				timeout.mux.Lock()
+				fmt.Println("TIMED OUT....")
+				callback()
+			}
+		}()
 	}
 }
-*/
 
-func (timeout *RumorTimeout) Stop() {
+func (timeout *Timeout) Set(d time.Duration, callback func()) {
 	timeout.mux.Lock()
 	defer timeout.mux.Unlock()
+	timeout.set(d, callback)
+}
 
-	timeout.ticker.Stop()
+func (timeout *Timeout) cancel() {
+	if timeout.active {
+		timeout.cancelChan <- nil
+		timeout.active = false
+	}
+}
+
+func (timeout *Timeout) Cancel() {
+	timeout.mux.Lock()
+	defer timeout.mux.Unlock()
+	timeout.cancel()
+}
+
+func (timeout *Timeout) trigger() {
+	if timeout.active {
+		timeout.triggerChan <- nil
+		timeout.active = false
+	}
+}
+
+func (timeout *Timeout) Trigger() {
+	timeout.mux.Lock()
+	defer timeout.mux.Unlock()
+	timeout.trigger()
 }

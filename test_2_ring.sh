@@ -103,24 +103,29 @@ do
 
 	if [[ "$gossipPort" != 5004 ]] ; then
 		if !(grep -Eq "$msgLine1" "${outputFiles[$i]}") ; then
+		    echo "$msgLine1 missing in ${outputFiles[$i]}"
         	failed="T"
     	fi
 		if !(grep -Eq "$msgLine2" "${outputFiles[$i]}") ; then
+		    echo "$msgLine2 missing in ${outputFiles[$i]}"
         	failed="T"
     	fi
 	fi
 
 	if [[ "$gossipPort" != 5001 ]] ; then
 		if !(grep -Eq "$msgLine3" "${outputFiles[$i]}") ; then
+		    echo "$msgLine3 missing in ${outputFiles[$i]}"
         	failed="T"
     	fi
 		if !(grep -Eq "$msgLine4" "${outputFiles[$i]}") ; then
+		    echo "$msgLine4 missing in ${outputFiles[$i]}"
         	failed="T"
     	fi
 	fi
 	
 	if [[ "$gossipPort" != 5006 ]] ; then
 		if !(grep -Eq "$msgLine5" "${outputFiles[$i]}") ; then
+		    echo "$msgLine5 missing in ${outputFiles[$i]}"
         	failed="T"
     	fi
 	fi

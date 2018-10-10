@@ -1,4 +1,4 @@
-package rumors
+package clock
 
 import (
 	"github.com/gregunz/Peerster/models/packets"
@@ -33,7 +33,7 @@ func (handler *rumorHandler) save(msg *packets.RumorMessage) {
 			}
 		}
 	} else {
-		// discading overwriting message
+		// discarding overwriting message
 	}
 }
 
@@ -67,16 +67,3 @@ func (handler *rumorHandler) ToPeerStatus() *packets.PeerStatus {
 		NextID:     handler.latestID + 1,
 	}
 }
-
-/*
-func (handler *RumorHandler) Get(id uint32) *RumorMessage {
-	handler.mux.Lock()
-	defer handler.mux.Unlock()
-
-	msg, ok := handler.messages[id]
-	if !ok {
-		return nil
-	}
-	return msg
-}
-*/

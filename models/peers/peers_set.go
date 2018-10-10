@@ -81,15 +81,17 @@ func (peersSet PeersSet) ToString(sep string) string {
 	return peersSet.toString(sep)
 }
 
-func (peersSet *PeersSet) addIpPort(ipPort string) {
-	peersSet.addPeer(NewPeer(ipPort))
+func (peersSet *PeersSet) addIpPort(ipPort string) *Peer {
+	peer := NewPeer(ipPort)
+	peersSet.addPeer(peer)
+	return peer
 }
 
-func (peersSet *PeersSet) AddIpPort(ipPort string) {
+func (peersSet *PeersSet) AddIpPort(ipPort string) *Peer {
 	peersSet.mux.Lock()
 	defer peersSet.mux.Unlock()
 
-	peersSet.addIpPort(ipPort)
+	return peersSet.addIpPort(ipPort)
 }
 
 func (peersSet *PeersSet) addPeer(peer *Peer) {

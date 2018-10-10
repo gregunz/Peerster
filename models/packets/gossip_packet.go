@@ -42,10 +42,6 @@ func (packet *GossipPacket) IsStatus() bool {
 	return packet.Status != nil
 }
 
-func (packet *GossipPacket) IsFromClient() bool {
-	return packet.IsSimple() || packet.IsRumor()
-}
-
 func (packet GossipPacket) String() string {
 	ls := []string{}
 	if packet.IsSimple() {
