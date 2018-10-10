@@ -1,7 +1,6 @@
 package timeouts
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -32,14 +31,11 @@ func (timeout *Timeout) set(d time.Duration, callback func()) {
 			select {
 			case <-timeout.triggerChan:
 				timeout.mux.Lock()
-				fmt.Println("TRIGGERED")
 				callback()
 			case <-timeout.cancelChan:
 				timeout.mux.Lock()
-				fmt.Println("CANCELLED")
 			case <-time.After(d):
 				timeout.mux.Lock()
-				fmt.Println("TIMED OUT....")
 				callback()
 			}
 		}()

@@ -238,7 +238,6 @@ func (g *Gossiper) handleSendPacket(packet *packets.GossipPacket, toPeer *peers.
 
 		// start timeout to this peer
 		toPeer.Timeout.Set(timeout_duration, func() {
-			fmt.Println("callback()")
 			if flipped := utils.FlipCoin(); flipped {
 				if randomPeer := g.peersSet.GetRandom(toPeer); randomPeer != nil {
 					g.sendPacket(packet, randomPeer)
