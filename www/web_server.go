@@ -35,7 +35,7 @@ func (server *WebServer) Start() {
 	router.HandleFunc("/node", server.postNodeHandler).Methods("POST")
 	router.HandleFunc("/message", server.postMessageHandler).Methods("POST")
 
-	http.ListenAndServe(server.gossiper.ClientAddress().ToIpPort(), router)
+	http.ListenAndServe(fmt.Sprintf(":%d", server.gossiper.GUIPort), router)
 }
 
 func (server *WebServer) getIdHandler(w http.ResponseWriter, r *http.Request) {

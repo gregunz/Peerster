@@ -18,6 +18,7 @@ var anti_entropy_duration = 1 * time.Second
 
 type Gossiper struct {
 	simple        bool
+	GUIPort		  uint
 	peerAddress   *peers.Address
 	clientAddress *peers.Address
 	peerConn      *net.UDPConn
@@ -36,15 +37,11 @@ func (g *Gossiper) PeersSet() *peers.PeersSet {
 	return g.peersSet
 }
 
-func (g *Gossiper) ClientAddress() *peers.Address {
-	return g.clientAddress
-}
-
 func (g *Gossiper) Name() string {
 	return g.name
 }
 
-func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, peersSet *peers.PeersSet) *Gossiper {
+func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.PeersSet) *Gossiper {
 
 	fmt.Printf("Creating Peerster named <%s> listening peers on ip:port <%s> "+
 		"and listening local clients on port <%d> with peers <%s>\n",
@@ -56,6 +53,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 
 	return &Gossiper{
 		simple:        simple,
+		GUIPort:	   guiPort,
 		peerAddress:   address,
 		peerConn:      peerConn,
 		clientAddress: clientAddr,
