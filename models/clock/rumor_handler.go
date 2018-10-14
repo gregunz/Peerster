@@ -20,7 +20,7 @@ func NewRumorHandler(origin string) *rumorHandler {
 	}
 }
 
-func (handler *rumorHandler) save(msg *packets.RumorMessage) {
+func (handler *rumorHandler) save(msg *packets.RumorMessage) bool {
 	_, ok := handler.messages[msg.ID]
 	if !ok {
 		handler.messages[msg.ID] = msg
@@ -35,13 +35,14 @@ func (handler *rumorHandler) save(msg *packets.RumorMessage) {
 	} else {
 		// discarding overwriting message
 	}
+	return !ok
 }
 
-func (handler *rumorHandler) Save(msg *packets.RumorMessage) {
+func (handler *rumorHandler) Save(msg *packets.RumorMessage) bool {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
-	handler.save(msg)
+	return handler.save(msg)
 }
 
 func (handler *rumorHandler) NextMessage(content string) *packets.RumorMessage {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/gregunz/Peerster/gossiper"
 	"github.com/gregunz/Peerster/models/peers"
+	"github.com/gregunz/Peerster/www"
+	"sync"
 )
 
 var uiPort uint
@@ -25,8 +27,16 @@ func init() {
 
 func main() {
 	parse()
+	var group sync.WaitGroup
+
 	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, &peersSet)
-	g.Start()
+	g.Start(&group)
+
+	server := www.NewWebServer(g)
+	server.Start()
+
+	fmt.Println("Ready!")
+	group.Wait()
 }
 
 func parse() {

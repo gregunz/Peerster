@@ -6,9 +6,9 @@ import (
 )
 
 type RumorMessage struct {
-	Origin string
-	ID     uint32
-	Text   string
+	Origin string `json:"origin"`
+	ID     uint32 `json:"id"`
+	Text   string `json:"text"`
 }
 
 func (msg *RumorMessage) AckPrint(fromPeer *peers.Peer) {

@@ -3,7 +3,7 @@ package packets
 import "fmt"
 
 type ClientPacket struct {
-	Message string
+	Message string `json:"message"`
 }
 
 func (packet *ClientPacket) AckPrint() {

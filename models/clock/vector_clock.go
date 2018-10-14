@@ -7,8 +7,9 @@ import (
 )
 
 type VectorClock struct {
-	handlers map[string]*rumorHandler
-	mux      sync.Mutex
+	handlers     map[string]*rumorHandler
+	latestRumors []*packets.RumorMessage
+	mux          sync.Mutex
 }
 
 func NewVectorClock(myOrigin string) *VectorClock {
@@ -25,9 +26,7 @@ func (vectorClock *VectorClock) ToStatusPacket() *packets.StatusPacket {
 
 	want := []packets.PeerStatus{}
 	for _, h := range vectorClock.handlers {
-		if h.latestID > 0 {
-			want = append(want, *h.ToPeerStatus())
-		}
+		want = append(want, *h.ToPeerStatus())
 	}
 	return &packets.StatusPacket{
 		Want: want,
@@ -54,7 +53,21 @@ func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) {
 	defer vectorClock.mux.Unlock()
 
 	h := vectorClock.getOrCreateHandler(msg.Origin)
-	h.Save(msg)
+	if h.Save(msg) {
+		vectorClock.latestRumors = append(vectorClock.latestRumors, msg)
+	}
+}
+
+func (vectorClock *VectorClock) GetLatestMessages() []*packets.RumorMessage {
+	vectorClock.mux.Lock()
+	defer vectorClock.mux.Unlock()
+
+	rumorsCopy := []*packets.RumorMessage{}
+	for _, r := range vectorClock.latestRumors {
+		rumorsCopy = append(rumorsCopy, r)
+	}
+	vectorClock.latestRumors = []*packets.RumorMessage{}
+	return rumorsCopy
 }
 
 func (vectorClock *VectorClock) Compare(statusMap map[string]uint32) (*packets.RumorMessage, bool) {
