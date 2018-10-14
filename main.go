@@ -37,7 +37,6 @@ func main() {
 	server := www.NewWebServer(g)
 	server.Start()
 
-	fmt.Println("Ready!")
 	group.Wait()
 }
 

@@ -16,7 +16,7 @@ type WebServer struct {
 }
 
 func NewWebServer(g *gossiper.Gossiper) *WebServer {
-	fmt.Println("Creating WebServer")
+	fmt.Printf("Creating WebServer on port %d", g.GUIPort)
 	return &WebServer{
 		gossiper: g,
 	}
