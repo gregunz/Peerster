@@ -31,7 +31,7 @@ func main() {
 	parse()
 	var group sync.WaitGroup
 
-	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, &peersSet)
+	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, guiPort, &peersSet)
 	g.Start(&group)
 
 	server := www.NewWebServer(g)
