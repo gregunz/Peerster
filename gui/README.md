@@ -1,6 +1,4 @@
-# www
-
-> Peerster GUI
+# Peerster GUI
 
 ## Build Setup
 
