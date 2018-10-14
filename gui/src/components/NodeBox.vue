@@ -1,17 +1,18 @@
 <template>
   <div>
+    <h2>List of known peers</h2>
     <b-container>
       <b-row>
         <b-col>
           <ul id="nodes">
             <li v-for="(n, idx) in nodes" :key="idx">
-              <h2>{{ n.name }}</h2>
+              <h3>{{ n }}</h3>
             </li>
           </ul>
         </b-col>
         <b-col>
-          <input v-model="newParticipant" placeholder="Add a new node">
-          <button v-on:click="onAddNewNode(newParticipant)">ADD</button></b-col>
+          <input v-model="node" placeholder="Type here...">
+          <button v-on:click="onNewNodeSent(node)">ADD PEER</button></b-col>
       </b-row>
     </b-container>
   </div>
@@ -25,14 +26,14 @@ export default {
       type: Array,
       required: true
     },
-    onAddNewNode: {
+    onNewNodeSent: {
       type: Function,
       required: true
     }
   },
   data () {
     return {
-      newParticipant: ''
+      node: ''
     }
   },
   methods: {

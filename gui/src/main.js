@@ -4,7 +4,6 @@ import '@babel/polyfill'
 import Vue from 'vue'
 import './plugins/vuetify'
 import App from './App'
-import router from './router'
 import Chat from 'vue-beautiful-chat'
 import BootstrapVue from 'bootstrap-vue'
 import 'bootstrap/dist/css/bootstrap.css'
@@ -18,7 +17,6 @@ Vue.config.productionTip = false
 /* eslint-disable no-new */
 new Vue({
   el: '#app',
-  router,
   components: { App },
   template: '<App/>'
 })
