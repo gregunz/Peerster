@@ -46,7 +46,7 @@ export default {
     onMessageWasSent (message) {
       // called when the user sends a message
       if (message.author === 'me') {
-        axios.post('http://localhost:8080/message', {message: message.data.text})
+        axios.post('/message', {message: message.data.text})
           .then(response => {
             console.log('successfully send message, response:' + response)
             this.messageList = [...this.messageList, message]
@@ -60,7 +60,7 @@ export default {
       }
     },
     onNewNodeSent (node) {
-      axios.post('http://localhost:8080/node', {peer: node})
+      axios.post('/node', {peer: node})
         .then(response => {
           console.log('successfully send node, response:' + response)
           this.addNewNode(node)
@@ -91,7 +91,7 @@ export default {
       }
     },
     getNewMessages () {
-      axios.get(`http://localhost:8080/message`)
+      axios.get(`/message`)
         .then(response => {
           for (let msg of response.data) {
             this.onMessageWasSent({author: msg.origin, type: 'text', data: {text: msg.text}})
@@ -102,7 +102,7 @@ export default {
         })
     },
     getNewNodes () {
-      axios.get(`http://localhost:8080/node`)
+      axios.get(`/node`)
         .then(response => {
           for (let node of response.data) {
             this.addNewNode(node)
@@ -114,7 +114,7 @@ export default {
     }
   },
   created () {
-    axios.get(`http://localhost:8080/id`)
+    axios.get(`/id`)
       .then(response => {
         this.name = response.data
       })
