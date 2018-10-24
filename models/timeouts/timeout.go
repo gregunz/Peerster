@@ -21,7 +21,6 @@ func NewTimeout() *Timeout {
 }
 
 func (timeout *Timeout) set(d time.Duration, callback func()) {
-
 	if !timeout.active {
 		timeout.active = true
 		go func() {

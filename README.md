@@ -50,7 +50,9 @@ The Graphical User Interface (GUI) will be available at:
 ```
 http://localhost:8080/gui/
 ```
-depending on the port for GUIPort you choose (the last '/' is important).
+when running the main application (depending on the port for GUIPort you choose) (the last '/' is important).
+
+This graphical interface assumes that the gossiper is used as group chat where messages are "read once". The app will not reload all the previous messages after closing your browser. But the messages that arrived while your browser was closed will still be accessible and received (no messages are left unseen). One could still restart the gossiper such that the GUI receives again all the messages if needed.
 
 ## Notes
 This project was done during this course:

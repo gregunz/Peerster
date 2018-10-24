@@ -58,16 +58,22 @@ func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) {
 	}
 }
 
-func (vectorClock *VectorClock) GetLatestMessages() []*packets.RumorMessage {
+func (vectorClock *VectorClock) GetAllMessages() []*packets.RumorMessage {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
-	rumorsCopy := []*packets.RumorMessage{}
-	for _, r := range vectorClock.latestRumors {
-		rumorsCopy = append(rumorsCopy, r)
-	}
-	vectorClock.latestRumors = []*packets.RumorMessage{}
-	return rumorsCopy
+	/*
+		rumorsCopy := []*packets.RumorMessage{}
+		for _, r := range vectorClock.latestRumors {
+			rumorsCopy = append(rumorsCopy, r)
+		}
+
+		// resetting the list of all messages
+		vectorClock.latestRumors = []*packets.RumorMessage{}
+
+		return rumorsCopy
+	*/
+	return vectorClock.latestRumors
 }
 
 func (vectorClock *VectorClock) Compare(statusMap map[string]uint32) (*packets.RumorMessage, bool) {
