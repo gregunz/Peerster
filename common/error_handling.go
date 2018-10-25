@@ -1,10 +1,13 @@
 package common
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 func HandleError(e error) {
 	if e != nil {
-		fmt.Printf("ERROR: %s\n", e)
+		log.Printf("ERROR: %s\n", e)
 	}
 }
 func HandleAbort(msg string, e error) {
@@ -12,5 +15,5 @@ func HandleAbort(msg string, e error) {
 	if e != nil {
 		errorString = fmt.Sprintf(":\n\t->ERROR: %s", e)
 	}
-	fmt.Printf("ABORT: %s%s\n", msg, errorString)
+	log.Printf("ABORT: %s%s\n", msg, errorString)
 }

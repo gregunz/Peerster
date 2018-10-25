@@ -16,7 +16,8 @@ func NewVectorClock(myOrigin string) *VectorClock {
 	handlers := map[string]*rumorHandler{}
 	handlers[myOrigin] = NewRumorHandler(myOrigin)
 	return &VectorClock{
-		handlers: handlers,
+		handlers:     handlers,
+		latestRumors: []*packets.RumorMessage{},
 	}
 }
 

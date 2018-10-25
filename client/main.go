@@ -21,7 +21,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	packet := packets.ClientPacket{
+	packet := packets.PostMessagePacket{
 		Message: msg,
 	}
 
@@ -33,7 +33,7 @@ func main() {
 	sendMessage(udpAddr, udpConn, &packet)
 }
 
-func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet *packets.ClientPacket) {
+func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet *packets.PostMessagePacket) {
 	packetBytes, err := protobuf.Encode(packet)
 	common.HandleError(err)
 	udpConn.WriteToUDP(packetBytes, udpAddr)

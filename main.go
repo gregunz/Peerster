@@ -10,6 +10,7 @@ import (
 )
 
 var uiPort uint
+var guiEnabled bool
 var guiPort uint
 var gossipAddr peers.Address
 var name string
@@ -20,7 +21,8 @@ var DefaultIpPort = "127.0.0.1:5000"
 
 func init() {
 	flag.UintVar(&uiPort, "UIPort", 8080, "port for the UI client")
-	flag.UintVar(&guiPort, "GUIPort", 8080, "port for the GUI client")
+	flag.BoolVar(&guiEnabled, "GUI", false, "whether GUI is enabled (override if GUIPort != 0)")
+	flag.UintVar(&guiPort, "GUIPort", 0, "port for the GUI client (if 0, a port is randomly assigned)")
 	flag.Var(&gossipAddr, "gossipAddr", fmt.Sprintf("ip:port for the gossiper (default \"%s\")", DefaultIpPort))
 	flag.StringVar(&name, "name", "", "name of the gossiper")
 	flag.Var(&peersSet, "peers", "comma-separated list of peers of the form ip:port")
@@ -34,15 +36,21 @@ func main() {
 	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, guiPort, &peersSet)
 	g.Start(&group)
 
-	server := www.NewWebServer(g)
-	server.Start()
+	if guiEnabled {
+		server := www.NewWebServer(g)
+		server.Start()
+	}
 
 	group.Wait()
+	fmt.Println("Hi")
 }
 
 func parse() {
 	flag.Parse()
 	if gossipAddr.IsEmpty() {
 		gossipAddr = *peers.NewAddress(DefaultIpPort)
+	}
+	if guiPort > 0 {
+		guiEnabled = true
 	}
 }
