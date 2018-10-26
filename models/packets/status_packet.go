@@ -7,7 +7,7 @@ import (
 )
 
 type StatusPacket struct {
-	Want []PeerStatus
+	Want []PeerStatus `json:"peer-status"`
 }
 
 func (packet *StatusPacket) AckPrint(fromPeer *peers.Peer) {

@@ -3,8 +3,8 @@ package packets
 import "fmt"
 
 type PeerStatus struct {
-	Identifier string
-	NextID     uint32
+	Identifier string `json:"identifier"`
+	NextID     uint32 `json:"next-id"`
 }
 
 func (ps PeerStatus) String() string {

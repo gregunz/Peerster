@@ -8,9 +8,9 @@ import (
 )
 
 type GossipPacket struct {
-	Simple *SimpleMessage
-	Rumor  *RumorMessage
-	Status *StatusPacket
+	Simple *SimpleMessage `json:"simple"`
+	Rumor  *RumorMessage  `json:"rumor"`
+	Status *StatusPacket  `json:"status"`
 }
 
 func (packet *GossipPacket) Check() error {

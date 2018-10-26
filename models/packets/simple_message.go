@@ -3,9 +3,9 @@ package packets
 import "fmt"
 
 type SimpleMessage struct {
-	OriginalName  string
-	RelayPeerAddr string
-	Contents      string
+	OriginalName  string `json:"original-name"`
+	RelayPeerAddr string `json:"relay-peer-address"`
+	Contents      string `json:"contents"`
 }
 
 func (msg *SimpleMessage) AckPrint() {
