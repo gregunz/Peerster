@@ -25,7 +25,6 @@ var upgrader = websocket.Upgrader{
 }
 
 func NewWebServer(g *gossiper.Gossiper) *WebServer {
-	log.Printf("WebServer created on port %d\n", g.GUIPort)
 	return &WebServer{
 		gossiper:   g,
 		clientChan: make(chan *ClientChannelElement, 1),
@@ -35,9 +34,6 @@ func NewWebServer(g *gossiper.Gossiper) *WebServer {
 func (server *WebServer) Start() {
 
 	router := mux.NewRouter()
-
-	// Create a simple file server
-	router.PathPrefix("/gui").Handler(http.FileServer(http.Dir("./gui")))
 
 	// Configure websocket route
 	router.HandleFunc("/ws", server.handleConnections)
@@ -50,6 +46,9 @@ func (server *WebServer) Start() {
 	// POST
 	router.HandleFunc("/node", server.postNodeHandler).Methods("POST")
 	router.HandleFunc("/message", server.postMessageHandler).Methods("POST")
+
+	// Create a simple file server
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui")))
 
 	go server.handleClientPacket()
 
@@ -64,15 +63,14 @@ func (server *WebServer) Start() {
 
 func (server *WebServer) handleClientPacket() {
 	for {
-		elem := <-server.clientChan
-		packet, w := elem.Packet, elem.Writer
-		server.handlePacket(packet, w, false)
-
-		if err := packet.Check(); err != nil {
-			common.HandleAbort("error in client packet", err)
-			continue
+		elem, ok := <-server.clientChan
+		if ok {
+			if err := elem.Packet.Check(); err != nil {
+				common.HandleAbort("error in client packet", err)
+				continue
+			}
+			server.handlePacket(elem.Packet, elem.Writer, false)
 		}
-
 	}
 }
 
