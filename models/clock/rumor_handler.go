@@ -45,7 +45,7 @@ func (handler *rumorHandler) Save(msg *packets.RumorMessage) bool {
 	return handler.save(msg)
 }
 
-func (handler *rumorHandler) NextMessage(content string) *packets.RumorMessage {
+func (handler *rumorHandler) CreateNextMessage(content string) *packets.RumorMessage {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
@@ -55,7 +55,7 @@ func (handler *rumorHandler) NextMessage(content string) *packets.RumorMessage {
 		ID:     handler.latestID,
 		Text:   content,
 	}
-	handler.messages[handler.latestID] = msg
+	//handler.messages[handler.latestID] = msg
 	return msg
 }
 

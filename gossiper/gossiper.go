@@ -108,7 +108,10 @@ func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 func (g *Gossiper) listenGossip(group *sync.WaitGroup) {
 	g.listen(g.gossiperConn, group, func(buffer []byte, fromIpPort string) {
 		var packet packets.GossipPacket
-		protobuf.Decode(buffer, &packet)
+		if err := protobuf.Decode(buffer, &packet); err != nil {
+			common.HandleAbort(fmt.Sprintf("received incorrect packet from <%s>", fromIpPort), err)
+			return
+		}
 		if err := packet.Check(); err != nil {
 			common.HandleAbort(fmt.Sprintf("received incorrect packet from <%s>", fromIpPort), err)
 			return
@@ -155,7 +158,9 @@ func (g *Gossiper) handleSimple(msg *packets.SimpleMessage, fromPeer *peers.Peer
 func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) {
 
 	// saving message
-	g.vectorClock.Save(msg)
+	if g.vectorClock.Save(msg) {
+		g.vectorClock.SaveLatest(msg)
+	}
 
 	msgToSend := &packets.RumorMessage{
 		ID:     msg.ID,
@@ -194,23 +199,28 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 	for {
 		packet := <-g.ClientChan
 
-		packet.AckPrint()
-		if g.mode.isSimple() {
-			msg := &packets.SimpleMessage{
-				Contents:      packet.Message,
-				RelayPeerAddr: g.gossiperAddr.ToIpPort(),
-				OriginalName:  g.Name,
-			}
-			g.sendPacket(msg.ToGossipPacket(), g.peersSet.GetSlice()...)
-		} else {
-			meHandler := g.vectorClock.GetOrCreateHandler(g.Name)
-			rumorMessage := meHandler.NextMessage(packet.Message)
+		go func() {
+			packet.AckPrint()
+			if g.mode.isSimple() {
+				msg := &packets.SimpleMessage{
+					Contents:      packet.Message,
+					RelayPeerAddr: g.gossiperAddr.ToIpPort(),
+					OriginalName:  g.Name,
+				}
+				g.sendPacket(msg.ToGossipPacket(), g.peersSet.GetSlice()...)
+			} else {
+				meHandler := g.vectorClock.GetOrCreateHandler(g.Name)
+				rumorMessage := meHandler.CreateNextMessage(packet.Message)
+				if g.vectorClock.Save(rumorMessage) {
+					g.vectorClock.SaveLatest(rumorMessage)
+				}
 
-			if randomPeer := g.peersSet.GetRandom(); randomPeer != nil {
-				g.sendPacket(rumorMessage.ToGossipPacket(), randomPeer)
-			}
+				if randomPeer := g.peersSet.GetRandom(); randomPeer != nil {
+					g.sendPacket(rumorMessage.ToGossipPacket(), randomPeer)
+				}
 
-		}
+			}
+		}()
 	}
 }
 
@@ -224,13 +234,13 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 			packet.AckPrint(fromPeer)
 			g.peersSet.AckPrint()
 
-			if packet.Simple != nil {
+			if packet.IsSimple() {
 				g.handleSimple(packet.Simple, fromPeer)
 			}
-			if packet.Rumor != nil {
+			if packet.IsRumor() {
 				g.handleRumor(packet.Rumor, fromPeer)
 			}
-			if packet.Status != nil {
+			if packet.IsStatus() {
 				g.handleStatus(packet.Status, fromPeer)
 			}
 		}()
@@ -270,7 +280,7 @@ func (g *Gossiper) handleSendPacket(packet *packets.GossipPacket, toPeer *peers.
 		packet.Rumor.SendPrintMongering(toPeer)
 
 		// start timeout to this peer
-		toPeer.Timeout.Set(timeout_duration, func() {
+		toPeer.Timeout.SetIfNotActive(timeout_duration, func() {
 			if flipped := utils.FlipCoin(); flipped {
 				if randomPeer := g.peersSet.GetRandom(toPeer); randomPeer != nil {
 					g.sendPacket(packet, randomPeer)

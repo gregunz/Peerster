@@ -49,14 +49,19 @@ func (vectorClock *VectorClock) GetOrCreateHandler(origin string) *rumorHandler 
 	return vectorClock.getOrCreateHandler(origin)
 }
 
-func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) {
+func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) bool {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
 	h := vectorClock.getOrCreateHandler(msg.Origin)
-	if h.Save(msg) {
-		vectorClock.latestRumors = append(vectorClock.latestRumors, msg)
-	}
+	return h.Save(msg)
+}
+
+func (vectorClock *VectorClock) SaveLatest(msg *packets.RumorMessage) {
+	vectorClock.mux.Lock()
+	defer vectorClock.mux.Unlock()
+
+	vectorClock.latestRumors = append(vectorClock.latestRumors, msg)
 }
 
 func (vectorClock *VectorClock) GetAllMessages() []*packets.RumorMessage {
