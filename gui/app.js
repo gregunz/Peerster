@@ -2,60 +2,63 @@ new Vue({
     el: '#app',
 
     data: {
+        apiURL: '',
         ws: null, // Our websocket
-        newMsg: '', // Holds new messages to be sent to the server
-        chatContent: '', // A running list of chat messages displayed on the screen
-        email: null, // Email address used for grabbing an avatar
-        username: null, // Our username
-        joined: false // True if email and username have been filled in
+        chatBox: '', // Holds new messages to be sent to the server
+        chatMessages: [], // chat messages list
+        name: '',
     },
 
     created: function() {
         var self = this;
-        this.ws = new WebSocket('ws://' + window.location.host + '/ws');
-        this.ws.addEventListener('message', function(e) {
-            var msg = JSON.parse(e.data);
-            self.chatContent += '<div class="chip">'
-                    + '<img src="' + self.gravatarURL(msg.email) + '">' // Avatar
-                    + msg.username
-                + '</div>'
-                + emojione.toImage(msg.message) + '<br/>'; // Parse emojis
+        this.apiURL = window.location.host;
+        axios
+            .get('http://' + this.apiURL + '/id')
+            .then(response =>  {
+                this.name = response.data;
+            });
+        this.ws = new WebSocket('ws://' + this.apiURL + '/ws');
+        this.ws.onopen = () => {
+            self.ws.send(JSON.stringify({'subscribe-message' : {'with-previous': true}})); // subscribing to messages
+        };
 
-            var element = document.getElementById('chat-messages');
-            element.scrollTop = element.scrollHeight; // Auto scroll to the bottom
+        this.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
+
+            let packet = JSON.parse(e.data);
+            if (packet.text && packet.origin) { // message packet
+                self.saveMsg(packet.text, packet.origin);
+            } else {
+                console.log("packet not handled: " + packet);
+            }
+
         });
     },
 
     methods: {
         send: function () {
-            if (this.newMsg != '') {
-                this.ws.send(
-                    JSON.stringify({
-                        email: this.email,
-                        username: this.username,
-                        message: $('<p>').html(this.newMsg).text() // Strip out html
+            if (this.chatBox !== '') {
+                let msg = $('<p>').html(this.chatBox).text(); // Strip out html
+                let msgPacket = {
+                    'post-message': {
+                        'message': msg
                     }
-                ));
-                this.newMsg = ''; // Reset newMsg
+                };
+                this.ws.send(JSON.stringify(msgPacket));
+                this.chatBox = ''; // Reset chatBox
             }
         },
 
-        join: function () {
-            if (!this.email) {
-                Materialize.toast('You must enter an email', 2000);
-                return
-            }
-            if (!this.username) {
-                Materialize.toast('You must choose a username', 2000);
-                return
-            }
-            this.email = $('<p>').html(this.email).text();
-            this.username = $('<p>').html(this.username).text();
-            this.joined = true;
+        saveMsg: function (text, name) {
+            this.chatMessages.push({
+                text: text,
+                origin: name,
+            });
+            let element = document.getElementById('chat-messages');
+            element.scrollTop = element.scrollHeight; // Auto scroll to the bottom
         },
 
-        gravatarURL: function(email) {
-            return 'http://www.gravatar.com/avatar/' + CryptoJS.MD5(email);
+        avatarURL: function(name) {
+            return 'https://api.adorable.io/avatars/100/' + name;
         }
     }
 });
