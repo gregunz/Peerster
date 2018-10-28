@@ -158,9 +158,7 @@ func (g *Gossiper) handleSimple(msg *packets.SimpleMessage, fromPeer *peers.Peer
 func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) {
 
 	// saving message
-	if g.vectorClock.Save(msg) {
-		g.vectorClock.SaveLatest(msg)
-	}
+	g.vectorClock.Save(msg)
 
 	msgToSend := &packets.RumorMessage{
 		ID:     msg.ID,
@@ -183,7 +181,7 @@ func (g *Gossiper) handleStatus(packet *packets.StatusPacket, fromPeer *peers.Pe
 	if rumorMsg != nil { // has a msg to send
 		go g.sendPacket(rumorMsg.ToGossipPacket(), fromPeer) // send the new message
 	}
-	if remoteHasMsg { // remote has new message //TODO: check if both cannot happen (else if)
+	if remoteHasMsg { // remote has new message
 		go g.sendPacket(g.vectorClock.ToStatusPacket().ToGossipPacket(), fromPeer) // send status to remote
 	}
 	if rumorMsg == nil && !remoteHasMsg { // is up to date
@@ -211,9 +209,7 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 			} else {
 				meHandler := g.vectorClock.GetOrCreateHandler(g.Name)
 				rumorMessage := meHandler.CreateNextMessage(packet.Message)
-				if g.vectorClock.Save(rumorMessage) {
-					g.vectorClock.SaveLatest(rumorMessage)
-				}
+				g.vectorClock.Save(rumorMessage)
 
 				if randomPeer := g.peersSet.GetRandom(); randomPeer != nil {
 					g.sendPacket(rumorMessage.ToGossipPacket(), randomPeer)

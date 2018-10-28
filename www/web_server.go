@@ -15,6 +15,8 @@ import (
 type WebServer struct {
 	gossiper   *gossiper.Gossiper
 	clientChan chan *ClientChannelElement
+	allRumors  []*packets.RumorMessage
+	clients    map[Writer]*client
 }
 
 // Configure the upgrader
@@ -28,6 +30,8 @@ func NewWebServer(g *gossiper.Gossiper) *WebServer {
 	return &WebServer{
 		gossiper:   g,
 		clientChan: make(chan *ClientChannelElement, 1),
+		allRumors:  []*packets.RumorMessage{},
+		clients:    map[Writer]*client{},
 	}
 }
 
@@ -51,6 +55,7 @@ func (server *WebServer) Start() {
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui")))
 
 	go server.handleClientPacket()
+	go server.handleRumorSubscriptions()
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
@@ -74,14 +79,32 @@ func (server *WebServer) handleClientPacket() {
 	}
 }
 
+func (server *WebServer) handleRumorSubscriptions() {
+	for {
+		rumor, ok := <-server.gossiper.VectorClock().LatestRumorChan
+		server.allRumors = append(server.allRumors, rumor)
+		if ok {
+			for w, c := range server.clients {
+				if c.IsSubscribedToMessage {
+					common.HandleError(w.WriteJSON(rumor))
+				}
+			}
+		}
+	}
+}
+
 func (server *WebServer) handlePacket(packet *packets.ClientPacket, w Writer, isRest bool) {
+
+	packet.AckPrint()
+
+	client := server.clients[w]
 
 	if packet.IsGetId() {
 		common.HandleError(w.WriteJSON(server.gossiper.Name))
 		return
 	}
 	if packet.IsGetMessage() {
-		common.HandleError(w.WriteJSON(server.gossiper.VectorClock().GetAllMessages()))
+		common.HandleError(w.WriteJSON(server.allRumors))
 		return
 	}
 	if packet.IsPostMessage() {
@@ -102,6 +125,17 @@ func (server *WebServer) handlePacket(packet *packets.ClientPacket, w Writer, is
 		}
 		return
 	}
+	if packet.IsSubscribeMessage() {
+		if !client.IsSubscribedToMessage {
+			client.IsSubscribedToMessage = true
+			if packet.SubscribeMessage.WithPrevious {
+				for _, rumor := range server.allRumors {
+					common.HandleError(w.WriteJSON(rumor))
+				}
+			}
+		}
+		return
+	}
 
 	common.HandleAbort("an unexpected event occurred while processing ClientPacket", nil)
 }
@@ -113,15 +147,27 @@ func (server *WebServer) handleConnections(w http.ResponseWriter, r *http.Reques
 		common.HandleAbort("could not upgrade the connection to websocket", err)
 		return
 	}
+
 	// Make sure we close the connection when the function returns
-	defer ws.Close()
+	defer func() {
+		ws.Close()
+		delete(server.clients, ws)
+	}()
+
+	c, ok := server.clients[ws]
+	if !ok {
+		c = NewClient()
+		server.clients[ws] = c
+		log.Printf("<web-server> new client just arrived")
+	}
+
 	for {
 		var packet packets.ClientPacket
 		// Read in a new message as JSON and map it to a Message object
 		err := ws.ReadJSON(&packet)
 		if err != nil {
-			log.Printf("error: %v", err)
-			continue
+			common.HandleAbort("error while reading json of websocket", err)
+			break
 		}
 		// Send the newly received message to the broadcast channel
 		server.clientChan <- &ClientChannelElement{
@@ -173,7 +219,7 @@ func (server *WebServer) postMessageHandler(w http.ResponseWriter, r *http.Reque
 	postMessage := packets.PostMessagePacket{}
 
 	if err := json.NewDecoder(r.Body).Decode(&postMessage); err != nil {
-		common.HandleAbort("Could not decode body of PostMessagePacket", err)
+		common.HandleAbort("could not decode body of PostMessagePacket", err)
 	}
 
 	packet := &packets.ClientPacket{
@@ -187,7 +233,7 @@ func (server *WebServer) postNodeHandler(w http.ResponseWriter, r *http.Request)
 	postNode := packets.PostNodePacket{}
 
 	if err := json.NewDecoder(r.Body).Decode(&postNode); err != nil {
-		common.HandleAbort("Could not decode body of PostNode", err)
+		common.HandleAbort("could not decode body of PostNode", err)
 	}
 
 	packet := &packets.ClientPacket{

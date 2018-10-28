@@ -55,7 +55,7 @@ func (packet GossipPacket) String() string {
 	}
 	if len(ls) == 0 {
 		common.HandleError(fmt.Errorf("empty gossip packet"))
-		return ""
+		return "<empty>"
 	}
 	return strings.Join(ls, " + ")
 }

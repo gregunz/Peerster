@@ -7,17 +7,17 @@ import (
 )
 
 type VectorClock struct {
-	handlers     map[string]*rumorHandler
-	latestRumors []*packets.RumorMessage
-	mux          sync.Mutex
+	handlers        map[string]*rumorHandler
+	LatestRumorChan chan *packets.RumorMessage
+	mux             sync.Mutex
 }
 
 func NewVectorClock(myOrigin string) *VectorClock {
 	handlers := map[string]*rumorHandler{}
 	handlers[myOrigin] = NewRumorHandler(myOrigin)
 	return &VectorClock{
-		handlers:     handlers,
-		latestRumors: []*packets.RumorMessage{},
+		handlers:        handlers,
+		LatestRumorChan: make(chan *packets.RumorMessage, 1),
 	}
 }
 
@@ -49,37 +49,16 @@ func (vectorClock *VectorClock) GetOrCreateHandler(origin string) *rumorHandler 
 	return vectorClock.getOrCreateHandler(origin)
 }
 
-func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) bool {
+func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
 	h := vectorClock.getOrCreateHandler(msg.Origin)
-	return h.Save(msg)
-}
-
-func (vectorClock *VectorClock) SaveLatest(msg *packets.RumorMessage) {
-	vectorClock.mux.Lock()
-	defer vectorClock.mux.Unlock()
-
-	vectorClock.latestRumors = append(vectorClock.latestRumors, msg)
-}
-
-func (vectorClock *VectorClock) GetAllMessages() []*packets.RumorMessage {
-	vectorClock.mux.Lock()
-	defer vectorClock.mux.Unlock()
-
-	/*
-		rumorsCopy := []*packets.RumorMessage{}
-		for _, r := range vectorClock.latestRumors {
-			rumorsCopy = append(rumorsCopy, r)
-		}
-
-		// resetting the list of all messages
-		vectorClock.latestRumors = []*packets.RumorMessage{}
-
-		return rumorsCopy
-	*/
-	return vectorClock.latestRumors
+	if h.Save(msg) { // if it is a new message
+		go func() {
+			vectorClock.LatestRumorChan <- msg
+		}()
+	}
 }
 
 func (vectorClock *VectorClock) Compare(statusMap map[string]uint32) (*packets.RumorMessage, bool) {
