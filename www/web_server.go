@@ -74,7 +74,7 @@ func (server *WebServer) handleClientPacket() {
 				common.HandleAbort("error in client packet", err)
 				continue
 			}
-			server.handlePacket(elem.Packet, elem.Writer, false)
+			go server.handlePacket(elem.Packet, elem.Writer, false)
 		}
 	}
 }
@@ -82,8 +82,8 @@ func (server *WebServer) handleClientPacket() {
 func (server *WebServer) handleRumorSubscriptions() {
 	for {
 		rumor, ok := <-server.gossiper.VectorClock().LatestRumorChan
-		server.allRumors = append(server.allRumors, rumor)
 		if ok {
+			server.allRumors = append(server.allRumors, rumor)
 			for w, c := range server.clients {
 				if c.IsSubscribedToMessage {
 					common.HandleError(w.WriteJSON(rumor))
@@ -187,13 +187,6 @@ func handlerToWriter(w http.ResponseWriter, r *http.Request) Writer {
 	}
 }
 
-func (server *WebServer) send(packet *packets.ClientPacket, w Writer, isRest bool) {
-	server.clientChan <- &ClientChannelElement{
-		Packet: packet,
-		Writer: w,
-	}
-}
-
 func (server *WebServer) getIdHandler(w http.ResponseWriter, r *http.Request) {
 	packet := &packets.ClientPacket{
 		GetId: &packets.GetIdPacket{},
@@ -225,7 +218,7 @@ func (server *WebServer) postMessageHandler(w http.ResponseWriter, r *http.Reque
 	packet := &packets.ClientPacket{
 		PostMessage: &postMessage,
 	}
-	server.send(packet, handlerToWriter(w, r), true)
+	server.handlePacket(packet, handlerToWriter(w, r), true)
 }
 
 func (server *WebServer) postNodeHandler(w http.ResponseWriter, r *http.Request) {
@@ -239,5 +232,5 @@ func (server *WebServer) postNodeHandler(w http.ResponseWriter, r *http.Request)
 	packet := &packets.ClientPacket{
 		PostNode: &postNode,
 	}
-	server.send(packet, handlerToWriter(w, r), true)
+	server.handlePacket(packet, handlerToWriter(w, r), true)
 }
