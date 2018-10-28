@@ -10,7 +10,7 @@ new Vue({
     },
 
     created: function() {
-        var self = this;
+        const self = this;
         this.apiURL = window.location.host;
         axios
             .get('http://' + this.apiURL + '/id')
@@ -24,7 +24,7 @@ new Vue({
 
         this.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
 
-            let packet = JSON.parse(e.data);
+            const packet = JSON.parse(e.data);
             if (packet.text && packet.origin) { // message packet
                 self.saveMsg(packet.text, packet.origin);
             } else {
@@ -37,8 +37,8 @@ new Vue({
     methods: {
         send: function () {
             if (this.chatBox !== '') {
-                let msg = $('<p>').html(this.chatBox).text(); // Strip out html
-                let msgPacket = {
+                const msg = this.stripOutHtml(this.chatBox);
+                const msgPacket = {
                     'post-message': {
                         'message': msg
                     }
@@ -49,12 +49,24 @@ new Vue({
         },
 
         saveMsg: function (text, name) {
+            text = this.stripOutHtml(text);
             this.chatMessages.push({
                 text: text,
                 origin: name,
             });
-            let element = document.getElementById('chat-messages');
+            const self = this;
+            setTimeout(function () {
+                self.scrollToTop('chat-messages')
+            }, 1);
+        },
+
+        scrollToTop: function (id) {
+            const element = document.getElementById(id);
             element.scrollTop = element.scrollHeight; // Auto scroll to the bottom
+        },
+
+        stripOutHtml: function (text) {
+            return $('<p>').html(text).text();
         },
 
         avatarURL: function(name) {

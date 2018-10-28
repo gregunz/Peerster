@@ -28,7 +28,7 @@
                             <img v-bind:src="avatarURL(message.origin)"/>
                             {{ message.origin }}
                         </div>
-                        {{ emojione.toImage(message.text) }}
+                        <span v-html="emojione.toImage(message.text)"></span>
                     </div>
                 </div>
             </div>
