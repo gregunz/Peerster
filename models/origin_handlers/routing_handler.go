@@ -9,7 +9,7 @@ import (
 
 type routingHandler struct {
 	origin   string
-	address  *peers.Address
+	peer     *peers.Peer
 	latestID uint32
 	mux      sync.Mutex
 }
@@ -17,7 +17,7 @@ type routingHandler struct {
 func NewRoutingHandler(origin string) *routingHandler {
 	return &routingHandler{
 		origin:   origin,
-		address:  nil,
+		peer:     nil,
 		latestID: 0,
 	}
 }
@@ -28,7 +28,7 @@ func (handler routingHandler) AckRumor(rumor *packets_gossiper.RumorMessage, fro
 
 	if rumor.Origin == handler.origin && rumor.ID > handler.latestID {
 		handler.latestID = rumor.ID
-		handler.address = fromPeer.Addr
-		fmt.Printf("DSDV %s %s\n", handler.origin, handler.address.ToIpPort())
+		handler.peer = fromPeer
+		fmt.Printf("DSDV %s %s\n", handler.origin, handler.peer.Addr.ToIpPort())
 	}
 }

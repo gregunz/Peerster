@@ -11,7 +11,7 @@ type VectorClock interface {
 
 	ToStatusPacket() *packets_gossiper.StatusPacket
 	GetOrCreateHandler(origin string) *saveRumorHandler
-	Save(msg *packets_gossiper.RumorMessage)
+	Save(msg *packets_gossiper.RumorMessage) bool
 	Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool)
 }
 
@@ -48,16 +48,12 @@ func (vectorClock *ProtoVectorClock) GetOrCreateHandler(origin string) *saveRumo
 	return vectorClock.getOrCreateHandler(origin)
 }
 
-func (vectorClock *ProtoVectorClock) Save(msg *packets_gossiper.RumorMessage) {
+func (vectorClock *ProtoVectorClock) Save(msg *packets_gossiper.RumorMessage) bool {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
 	h := vectorClock.getOrCreateHandler(msg.Origin)
-	if h.Save(msg) { // if it is a new message
-		go func() {
-			vectorClock.latestRumorChan <- msg
-		}()
-	}
+	return h.Save(msg)
 }
 
 func (vectorClock *ProtoVectorClock) Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool) {

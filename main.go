@@ -16,6 +16,7 @@ var gossipAddr peers.Address
 var name string
 var peersSet peers.Set
 var simple bool
+var rTimerSeconds uint
 
 var DefaultIpPort = "127.0.0.1:5000"
 
@@ -26,6 +27,7 @@ func init() {
 	flag.Var(&gossipAddr, "gossipAddr", fmt.Sprintf("ip:port for the gossiper (default \"%s\")", DefaultIpPort))
 	flag.StringVar(&name, "name", "", "name of the gossiper")
 	flag.Var(&peersSet, "peers", "comma-separated list of peers of the form ip:port")
+	flag.UintVar(&rTimerSeconds, "rtimer", 0, "route rumors sending period in seconds, 0 to disable sending of route rumors")
 	flag.BoolVar(&simple, "simple", false, "run gossiper in simple broadcast mode")
 }
 
@@ -33,7 +35,7 @@ func main() {
 	parse()
 	var group sync.WaitGroup
 
-	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, guiPort, &peersSet)
+	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, guiPort, &peersSet, rTimerSeconds)
 	g.Start(&group)
 
 	if guiEnabled {
@@ -42,7 +44,6 @@ func main() {
 	}
 
 	group.Wait()
-	fmt.Println("Hi")
 }
 
 func parse() {

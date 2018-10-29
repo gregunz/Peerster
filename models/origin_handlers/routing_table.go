@@ -7,6 +7,7 @@ import (
 
 type RoutingTable interface {
 	AckRumor(rumor *packets_gossiper.RumorMessage, fromPeer *peers.Peer)
+	Get(origin string) *peers.Peer
 }
 
 type ProtoRoutingTable struct {
@@ -21,4 +22,8 @@ func (table ProtoRoutingTable) AckRumor(rumor *packets_gossiper.RumorMessage, fr
 	if rumor.Origin != table.originsHandler.MyOrigin {
 		table.getOrCreateHandler(rumor.Origin).AckRumor(rumor, fromPeer)
 	}
+}
+
+func (table ProtoRoutingTable) Get(origin string) *peers.Peer {
+	return table.getOrCreateHandler(origin).peer
 }

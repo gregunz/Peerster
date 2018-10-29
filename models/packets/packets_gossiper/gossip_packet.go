@@ -8,9 +8,10 @@ import (
 )
 
 type GossipPacket struct {
-	Simple *SimpleMessage `json:"simple"`
-	Rumor  *RumorMessage  `json:"rumor"`
-	Status *StatusPacket  `json:"status"`
+	Simple  *SimpleMessage  `json:"simple"`
+	Rumor   *RumorMessage   `json:"rumor"`
+	Status  *StatusPacket   `json:"status"`
+	Private *PrivateMessage `json:"private"`
 }
 
 func (packet *GossipPacket) Check() error {
@@ -22,6 +23,9 @@ func (packet *GossipPacket) Check() error {
 		counter += 1
 	}
 	if packet.IsStatus() {
+		counter += 1
+	}
+	if packet.IsPrivate() {
 		counter += 1
 	}
 	if counter == 1 {
@@ -42,6 +46,10 @@ func (packet *GossipPacket) IsStatus() bool {
 	return packet.Status != nil
 }
 
+func (packet *GossipPacket) IsPrivate() bool {
+	return packet.Private != nil
+}
+
 func (packet GossipPacket) String() string {
 	ls := []string{}
 	if packet.IsSimple() {
@@ -53,6 +61,9 @@ func (packet GossipPacket) String() string {
 	if packet.IsStatus() {
 		ls = append(ls, packet.Status.String())
 	}
+	if packet.IsPrivate() {
+		ls = append(ls, packet.Private.String())
+	}
 	if len(ls) == 0 {
 		common.HandleError(fmt.Errorf("empty gossip packet"))
 		return "<empty>"
@@ -60,7 +71,7 @@ func (packet GossipPacket) String() string {
 	return strings.Join(ls, " + ")
 }
 
-func (packet *GossipPacket) AckPrint(fromPeer *peers.Peer) {
+func (packet *GossipPacket) AckPrint(fromPeer *peers.Peer, myOrigin string) {
 	if packet.IsSimple() {
 		packet.Simple.AckPrint()
 	}
@@ -69,5 +80,8 @@ func (packet *GossipPacket) AckPrint(fromPeer *peers.Peer) {
 	}
 	if packet.IsStatus() {
 		packet.Status.AckPrint(fromPeer)
+	}
+	if packet.IsPrivate() {
+		packet.Private.AckPrint(myOrigin)
 	}
 }

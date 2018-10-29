@@ -38,7 +38,7 @@ func (originsHandler *OriginsHandler) ToRoutingTable() RoutingTable {
 func (originsHandler *OriginsHandler) getOrCreateHandler(origin string) *OriginHandlerElem {
 	h, ok := originsHandler.Map[origin]
 	if !ok {
-		h = NewHandler(origin)
+		h = originsHandler.NewHandler(origin)
 		originsHandler.Map[origin] = h
 	}
 	return h
@@ -49,4 +49,11 @@ func (originsHandler *OriginsHandler) GetOrCreateHandler(origin string) *OriginH
 	defer originsHandler.mux.Unlock()
 
 	return originsHandler.getOrCreateHandler(origin)
+}
+
+func (originsHandler *OriginsHandler) NewHandler(origin string) *OriginHandlerElem {
+	return &OriginHandlerElem{
+		saveRumor:      NewRumorHandler(origin, originsHandler.latestRumorChan),
+		routingHandler: NewRoutingHandler(origin),
+	}
 }
