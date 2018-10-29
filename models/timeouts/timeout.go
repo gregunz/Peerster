@@ -30,14 +30,14 @@ func (timeout *Timeout) SetIfNotActive(d time.Duration, callback func()) {
 			select {
 			case <-timeout.cancelChan:
 				// do nothing
-				timeout.IsActive = false
 			case <-timeout.triggerChan:
-				callback()
-				timeout.IsActive = false
+				go callback()
 			case <-time.After(d):
 				timeout.mux.Lock()
-				callback()
-				timeout.IsActive = false
+				if timeout.IsActive {
+					go callback()
+					timeout.IsActive = false
+				}
 				timeout.mux.Unlock()
 			}
 		}()
@@ -50,6 +50,7 @@ func (timeout *Timeout) Cancel() {
 
 	if timeout.IsActive {
 		timeout.cancelChan <- nil
+		timeout.IsActive = false
 	}
 }
 
@@ -59,5 +60,6 @@ func (timeout *Timeout) Trigger() {
 
 	if timeout.IsActive {
 		timeout.triggerChan <- nil
+		timeout.IsActive = false
 	}
 }
