@@ -1,14 +1,14 @@
 package clock
 
 import (
-	"github.com/gregunz/Peerster/models/packets"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"math/rand"
 	"sync"
 )
 
 type VectorClock struct {
 	handlers        map[string]*rumorHandler
-	LatestRumorChan chan *packets.RumorMessage
+	LatestRumorChan chan *packets_gossiper.RumorMessage
 	mux             sync.Mutex
 }
 
@@ -17,19 +17,19 @@ func NewVectorClock(myOrigin string) *VectorClock {
 	handlers[myOrigin] = NewRumorHandler(myOrigin)
 	return &VectorClock{
 		handlers:        handlers,
-		LatestRumorChan: make(chan *packets.RumorMessage, 1),
+		LatestRumorChan: make(chan *packets_gossiper.RumorMessage, 1),
 	}
 }
 
-func (vectorClock *VectorClock) ToStatusPacket() *packets.StatusPacket {
+func (vectorClock *VectorClock) ToStatusPacket() *packets_gossiper.StatusPacket {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
-	want := []packets.PeerStatus{}
+	want := []packets_gossiper.PeerStatus{}
 	for _, h := range vectorClock.handlers {
 		want = append(want, *h.ToPeerStatus())
 	}
-	return &packets.StatusPacket{
+	return &packets_gossiper.StatusPacket{
 		Want: want,
 	}
 }
@@ -49,7 +49,7 @@ func (vectorClock *VectorClock) GetOrCreateHandler(origin string) *rumorHandler 
 	return vectorClock.getOrCreateHandler(origin)
 }
 
-func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) {
+func (vectorClock *VectorClock) Save(msg *packets_gossiper.RumorMessage) {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
@@ -61,11 +61,11 @@ func (vectorClock *VectorClock) Save(msg *packets.RumorMessage) {
 	}
 }
 
-func (vectorClock *VectorClock) Compare(statusMap map[string]uint32) (*packets.RumorMessage, bool) {
+func (vectorClock *VectorClock) Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool) {
 	vectorClock.mux.Lock()
 	defer vectorClock.mux.Unlock()
 
-	msgToSend := []*packets.RumorMessage{}
+	msgToSend := []*packets_gossiper.RumorMessage{}
 	remoteHasMsg := false
 
 	for origin, nextID := range statusMap {

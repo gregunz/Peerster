@@ -1,11 +1,11 @@
 package www
 
 import (
-	"github.com/gregunz/Peerster/models/packets"
+	"github.com/gregunz/Peerster/models/packets/packets_client"
 )
 
 type ClientChannelElement struct {
-	Packet *packets.ClientPacket
+	Packet *packets_client.ClientPacket
 	Writer Writer
 }
 

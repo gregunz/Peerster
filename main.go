@@ -21,7 +21,7 @@ var DefaultIpPort = "127.0.0.1:5000"
 
 func init() {
 	flag.UintVar(&uiPort, "UIPort", 8080, "port for the UI client")
-	flag.BoolVar(&guiEnabled, "GUI", false, "whether GUI is enabled (override if GUIPort != 0)")
+	flag.BoolVar(&guiEnabled, "GUI", true, "whether GUI is enabled (set to true if GUIPort != 0)")
 	flag.UintVar(&guiPort, "GUIPort", 0, "port for the GUI client (if 0, a port is randomly assigned)")
 	flag.Var(&gossipAddr, "gossipAddr", fmt.Sprintf("ip:port for the gossiper (default \"%s\")", DefaultIpPort))
 	flag.StringVar(&name, "name", "", "name of the gossiper")

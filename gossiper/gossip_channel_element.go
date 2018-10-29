@@ -1,11 +1,11 @@
 package gossiper
 
 import (
-	"github.com/gregunz/Peerster/models/packets"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 )
 
 type GossipChannelElement struct {
-	Packet *packets.GossipPacket
+	Packet *packets_gossiper.GossipPacket
 	From   *peers.Peer
 }

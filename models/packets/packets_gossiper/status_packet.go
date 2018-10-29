@@ -1,4 +1,4 @@
-package packets
+package packets_gossiper
 
 import (
 	"fmt"

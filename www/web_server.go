@@ -7,7 +7,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/gossiper"
-	"github.com/gregunz/Peerster/models/packets"
+	"github.com/gregunz/Peerster/models/packets/packets_client"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"log"
 	"net/http"
 )
@@ -15,7 +16,7 @@ import (
 type WebServer struct {
 	gossiper   *gossiper.Gossiper
 	clientChan chan *ClientChannelElement
-	allRumors  []*packets.RumorMessage
+	allRumors  []*packets_gossiper.RumorMessage
 	clients    map[Writer]*client
 }
 
@@ -30,7 +31,7 @@ func NewWebServer(g *gossiper.Gossiper) *WebServer {
 	return &WebServer{
 		gossiper:   g,
 		clientChan: make(chan *ClientChannelElement, 1),
-		allRumors:  []*packets.RumorMessage{},
+		allRumors:  []*packets_gossiper.RumorMessage{},
 		clients:    map[Writer]*client{},
 	}
 }
@@ -44,12 +45,6 @@ func (server *WebServer) Start() {
 
 	// GET
 	router.HandleFunc("/id", server.getIdHandler).Methods("GET")
-	router.HandleFunc("/node", server.getNodeHandler).Methods("GET")
-	router.HandleFunc("/message", server.getMessageHandler).Methods("GET")
-
-	// POST
-	router.HandleFunc("/node", server.postNodeHandler).Methods("POST")
-	router.HandleFunc("/message", server.postMessageHandler).Methods("POST")
 
 	// Create a simple file server
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui")))
@@ -93,7 +88,7 @@ func (server *WebServer) handleRumorSubscriptions() {
 	}
 }
 
-func (server *WebServer) handlePacket(packet *packets.ClientPacket, w Writer, isRest bool) {
+func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Writer, isRest bool) {
 
 	packet.AckPrint()
 
@@ -137,7 +132,7 @@ func (server *WebServer) handlePacket(packet *packets.ClientPacket, w Writer, is
 		return
 	}
 
-	common.HandleAbort("an unexpected event occurred while processing ClientPacket", nil)
+	common.HandleAbort("an unexpected event occurred while handling ClientPacket", nil)
 }
 
 func (server *WebServer) handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +157,7 @@ func (server *WebServer) handleConnections(w http.ResponseWriter, r *http.Reques
 	}
 
 	for {
-		var packet packets.ClientPacket
+		var packet packets_client.ClientPacket
 		// Read in a new message as JSON and map it to a Message object
 		err := ws.ReadJSON(&packet)
 		if err != nil {
@@ -188,49 +183,8 @@ func handlerToWriter(w http.ResponseWriter, r *http.Request) Writer {
 }
 
 func (server *WebServer) getIdHandler(w http.ResponseWriter, r *http.Request) {
-	packet := &packets.ClientPacket{
-		GetId: &packets.GetIdPacket{},
-	}
-	server.handlePacket(packet, handlerToWriter(w, r), true)
-}
-
-func (server *WebServer) getNodeHandler(w http.ResponseWriter, r *http.Request) {
-	packet := &packets.ClientPacket{
-		GetNode: &packets.GetNodePacket{},
-	}
-	server.handlePacket(packet, handlerToWriter(w, r), true)
-}
-
-func (server *WebServer) getMessageHandler(w http.ResponseWriter, r *http.Request) {
-	packet := &packets.ClientPacket{
-		GetMessage: &packets.GetMessagePacket{},
-	}
-	server.handlePacket(packet, handlerToWriter(w, r), true)
-}
-
-func (server *WebServer) postMessageHandler(w http.ResponseWriter, r *http.Request) {
-	postMessage := packets.PostMessagePacket{}
-
-	if err := json.NewDecoder(r.Body).Decode(&postMessage); err != nil {
-		common.HandleAbort("could not decode body of PostMessagePacket", err)
-	}
-
-	packet := &packets.ClientPacket{
-		PostMessage: &postMessage,
-	}
-	server.handlePacket(packet, handlerToWriter(w, r), true)
-}
-
-func (server *WebServer) postNodeHandler(w http.ResponseWriter, r *http.Request) {
-
-	postNode := packets.PostNodePacket{}
-
-	if err := json.NewDecoder(r.Body).Decode(&postNode); err != nil {
-		common.HandleAbort("could not decode body of PostNode", err)
-	}
-
-	packet := &packets.ClientPacket{
-		PostNode: &postNode,
+	packet := &packets_client.ClientPacket{
+		GetId: &packets_client.GetIdPacket{},
 	}
 	server.handlePacket(packet, handlerToWriter(w, r), true)
 }

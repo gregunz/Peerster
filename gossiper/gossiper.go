@@ -5,7 +5,8 @@ import (
 	"github.com/dedis/protobuf"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/models/clock"
-	"github.com/gregunz/Peerster/models/packets"
+	"github.com/gregunz/Peerster/models/packets/packets_client"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 	"github.com/gregunz/Peerster/utils"
 	"log"
@@ -21,7 +22,7 @@ type Gossiper struct {
 	mode          *GossiperMode
 	Name          string
 	GUIPort       uint
-	ClientChan    chan *packets.PostMessagePacket
+	ClientChan    chan *packets_client.PostMessagePacket
 	GossipChan    chan *GossipChannelElement
 	gossiperAddr  *peers.Address
 	clientAddress *peers.Address
@@ -60,7 +61,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		mode:          mode,
 		Name:          name,
 		GUIPort:       guiPort,
-		ClientChan:    make(chan *packets.PostMessagePacket, 1),
+		ClientChan:    make(chan *packets_client.PostMessagePacket, 1),
 		GossipChan:    make(chan *GossipChannelElement, 1),
 		gossiperAddr:  address,
 		clientAddress: clientAddr,
@@ -99,7 +100,7 @@ func (g *Gossiper) Start(group *sync.WaitGroup) {
 
 func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 	g.listen(g.clientConn, group, func(buffer []byte, _ string) {
-		var packet packets.PostMessagePacket
+		var packet packets_client.PostMessagePacket
 		protobuf.Decode(buffer, &packet)
 		g.ClientChan <- &packet
 	})
@@ -107,7 +108,7 @@ func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 
 func (g *Gossiper) listenGossip(group *sync.WaitGroup) {
 	g.listen(g.gossiperConn, group, func(buffer []byte, fromIpPort string) {
-		var packet packets.GossipPacket
+		var packet packets_gossiper.GossipPacket
 		if err := protobuf.Decode(buffer, &packet); err != nil {
 			common.HandleAbort(fmt.Sprintf("received incorrect packet from <%s>", fromIpPort), err)
 			return
@@ -144,8 +145,8 @@ func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
 	}
 }
 
-func (g *Gossiper) handleSimple(msg *packets.SimpleMessage, fromPeer *peers.Peer) {
-	msgToSend := &packets.SimpleMessage{
+func (g *Gossiper) handleSimple(msg *packets_gossiper.SimpleMessage, fromPeer *peers.Peer) {
+	msgToSend := &packets_gossiper.SimpleMessage{
 		Contents:      msg.Contents,
 		RelayPeerAddr: g.gossiperAddr.ToIpPort(),
 		OriginalName:  msg.OriginalName,
@@ -155,12 +156,12 @@ func (g *Gossiper) handleSimple(msg *packets.SimpleMessage, fromPeer *peers.Peer
 	go g.sendPacket(msgToSend.ToGossipPacket(), toPeers...)
 }
 
-func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) {
+func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
 
 	// saving message
 	g.vectorClock.Save(msg)
 
-	msgToSend := &packets.RumorMessage{
+	msgToSend := &packets_gossiper.RumorMessage{
 		ID:     msg.ID,
 		Text:   msg.Text,
 		Origin: msg.Origin,
@@ -175,7 +176,7 @@ func (g *Gossiper) handleRumor(msg *packets.RumorMessage, fromPeer *peers.Peer) 
 	go g.sendPacket(g.vectorClock.ToStatusPacket().ToGossipPacket(), fromPeer)
 }
 
-func (g *Gossiper) handleStatus(packet *packets.StatusPacket, fromPeer *peers.Peer) {
+func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer *peers.Peer) {
 	rumorMsg, remoteHasMsg := g.vectorClock.Compare(packet.ToMap())
 
 	if rumorMsg != nil { // has a msg to send
@@ -200,7 +201,7 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 		go func() {
 			packet.AckPrint()
 			if g.mode.isSimple() {
-				msg := &packets.SimpleMessage{
+				msg := &packets_gossiper.SimpleMessage{
 					Contents:      packet.Message,
 					RelayPeerAddr: g.gossiperAddr.ToIpPort(),
 					OriginalName:  g.Name,
@@ -243,7 +244,7 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 	}
 }
 
-func (g *Gossiper) sendPacket(packet *packets.GossipPacket, to ...*peers.Peer) {
+func (g *Gossiper) sendPacket(packet *packets_gossiper.GossipPacket, to ...*peers.Peer) {
 	if err := packet.Check(); err != nil {
 		common.HandleAbort(fmt.Sprintf("cannot sendPacket incorrect packet"), err)
 		return
@@ -270,7 +271,7 @@ func (g *Gossiper) sendPacket(packet *packets.GossipPacket, to ...*peers.Peer) {
 	}
 }
 
-func (g *Gossiper) handleSendPacket(packet *packets.GossipPacket, toPeer *peers.Peer) {
+func (g *Gossiper) handleSendPacket(packet *packets_gossiper.GossipPacket, toPeer *peers.Peer) {
 
 	if packet.IsRumor() {
 		packet.Rumor.SendPrintMongering(toPeer)
