@@ -23,9 +23,9 @@
         <div class="col s12">
             <div class="card horizontal">
                 <div id="chat-messages" class="card-content">
-                    <div v-for="message in chatMessages" v-bind:class="[(message.origin === name) ? 'chat-message-me' : 'chat-message-others']" >
+                    <div v-for="message in chatMessages" :class="[(message.origin === name) ? 'chat-message-me' : 'chat-message-others']" >
                         <div class="chip">
-                            <img v-bind:src="avatarURL(message.origin)"/>
+                            <img :src="avatarURL(message.origin)"/>
                             {{ message.origin }}
                         </div>
                         <span v-html="emojione.toImage(message.text)"></span>
@@ -36,13 +36,29 @@
     </div>
     <div class="row">
         <div class="input-field col s8">
-            <input type="text" v-model="chatBox" @keyup.enter="send">
+            <input type="text" v-model="chatBox" @keyup.enter="sendMsg">
         </div>
         <div class="input-field col s4">
-            <button class="waves-effect waves-light btn" @click="send">
+            <button class="waves-effect waves-light btn" @click="sendMsg">
                 <i class="material-icons right">chat</i>
-                Send
+                Send Message
             </button>
+        </div>
+    </div>
+    <div class="row">
+        <div class="input-field col s4">
+            <input type="text" v-model="nodeBox" @keyup.enter="sendNode">
+        </div>
+        <div class="input-field col s4">
+            <button class="waves-effect waves-light btn" @click="sendNode">
+                <i class="material-icons right">perm_identity</i>
+                Send Node
+            </button>
+        </div>
+    </div>
+    <div class="row">
+        <div v-for="node in nodes">
+            {{ node.address }}
         </div>
     </div>
 </main>

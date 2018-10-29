@@ -6,36 +6,47 @@ new Vue({
         ws: null, // Our websocket
         chatBox: '', // Holds new messages to be sent to the server
         chatMessages: [], // chat messages list
+        nodeBox: '',
+        nodes: [],
         name: '',
     },
 
     created: function() {
         const self = this;
         this.apiURL = window.location.host;
-        axios
-            .get('http://' + this.apiURL + '/id')
-            .then(response =>  {
-                this.name = response.data;
-            });
         this.ws = new WebSocket('ws://' + this.apiURL + '/ws');
         this.ws.onopen = () => {
-            self.ws.send(JSON.stringify({'subscribe-message' : {'with-previous': true}})); // subscribing to messages
+            self.ws.send(JSON.stringify({'get-id' : {}})); // getting name
+            self.ws.send(JSON.stringify({'subscribe-message' : {'subscribe': true, 'with-previous': true}})); // subscribing to messages
+            self.ws.send(JSON.stringify({'subscribe-node' : {'subscribe': true, 'with-previous': true}})); // subscribing to nodes
         };
 
         this.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
 
             const packet = JSON.parse(e.data);
-            if (packet.text && packet.origin) { // message packet
-                self.saveMsg(packet.text, packet.origin);
-            } else {
-                console.log("packet not handled: " + packet);
+
+            if (packet['get-id']) {
+                self.name = packet['get-id'].id;
+                return;
             }
 
+            if (packet.rumor) { // rumor message packet
+                const rumorMsg = packet.rumor.message;
+                self.saveMsg(rumorMsg.text, rumorMsg.origin);
+                return;
+            }
+
+            if (packet.peer) { // node packet
+                self.nodes.push(packet.peer);
+                return;
+            }
+
+            console.log("packet not handled: " + JSON.stringify(packet));
         });
     },
 
     methods: {
-        send: function () {
+        sendMsg: function () {
             if (this.chatBox !== '') {
                 const msg = this.stripOutHtml(this.chatBox);
                 const msgPacket = {
@@ -46,6 +57,18 @@ new Vue({
                 this.ws.send(JSON.stringify(msgPacket));
                 this.chatBox = ''; // Reset chatBox
             }
+        },
+
+        sendNode: function () {
+          if (this.nodeBox !== '') {
+              const nodePacket = {
+                  'post-node': {
+                      'node': this.nodeBox
+                  }
+              };
+              this.ws.send(JSON.stringify(nodePacket));
+              this.nodeBox = ''; // Reset chatBox
+          }
         },
 
         saveMsg: function (text, name) {
