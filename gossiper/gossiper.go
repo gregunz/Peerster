@@ -18,6 +18,7 @@ import (
 const (
 	timeoutDuration     = 1 * time.Second
 	antiEntropyDuration = 1 * time.Second
+	udpPacketSize       = 4096
 )
 
 type Gossiper struct {
@@ -133,7 +134,7 @@ func (g *Gossiper) listenGossip(group *sync.WaitGroup) {
 func (g *Gossiper) listen(conn *net.UDPConn, group *sync.WaitGroup, callback func([]byte, string)) {
 	defer conn.Close()
 	defer group.Done()
-	wholeBuffer := make([]byte, 4096)
+	wholeBuffer := make([]byte, udpPacketSize)
 	for {
 		n, udpAddr, err := conn.ReadFromUDP(wholeBuffer)
 		common.HandleError(err)
