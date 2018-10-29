@@ -14,7 +14,7 @@ type Set struct {
 	mux       sync.Mutex
 }
 
-func NewPeersSet(peers ...*Peer) *Set {
+func NewSet(peers ...*Peer) *Set {
 	newPeersSet := &Set{}
 	newPeersSet.init()
 	for _, p := range peers {
@@ -143,7 +143,7 @@ func (set *Set) GetSlice() []*Peer {
 }
 
 func (set *Set) filter(peer ...*Peer) *Set {
-	newPeersSet := NewPeersSet()
+	newPeersSet := NewSet()
 	for _, p := range set.peersMap {
 		isNotFiltered := true
 		for _, filteredPeer := range peer {
@@ -220,7 +220,7 @@ func (set *Set) Extend(other *Set) {
 }
 
 func (set *Set) Union(other *Set) *Set {
-	newPeersSet := NewPeersSet()
+	newPeersSet := NewSet()
 	newPeersSet.Extend(set)
 	newPeersSet.Extend(other)
 	return newPeersSet
