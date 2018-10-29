@@ -1,26 +1,26 @@
-package clock
+package origin_handlers
 
 import (
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"sync"
 )
 
-type rumorHandler struct {
+type saveRumorHandler struct {
 	origin   string
 	latestID uint32
 	messages map[uint32]*packets_gossiper.RumorMessage
 	mux      sync.Mutex
 }
 
-func NewRumorHandler(origin string) *rumorHandler {
-	return &rumorHandler{
+func NewRumorHandler(origin string) *saveRumorHandler {
+	return &saveRumorHandler{
 		origin:   origin,
 		latestID: 0,
 		messages: map[uint32]*packets_gossiper.RumorMessage{},
 	}
 }
 
-func (handler *rumorHandler) save(msg *packets_gossiper.RumorMessage) bool {
+func (handler *saveRumorHandler) save(msg *packets_gossiper.RumorMessage) bool {
 	_, ok := handler.messages[msg.ID]
 	if !ok {
 		handler.messages[msg.ID] = msg
@@ -38,14 +38,14 @@ func (handler *rumorHandler) save(msg *packets_gossiper.RumorMessage) bool {
 	return !ok
 }
 
-func (handler *rumorHandler) Save(msg *packets_gossiper.RumorMessage) bool {
+func (handler *saveRumorHandler) Save(msg *packets_gossiper.RumorMessage) bool {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
 	return handler.save(msg)
 }
 
-func (handler *rumorHandler) CreateNextMessage(content string) *packets_gossiper.RumorMessage {
+func (handler *saveRumorHandler) CreateNextMessage(content string) *packets_gossiper.RumorMessage {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
@@ -59,7 +59,7 @@ func (handler *rumorHandler) CreateNextMessage(content string) *packets_gossiper
 	return msg
 }
 
-func (handler *rumorHandler) ToPeerStatus() *packets_gossiper.PeerStatus {
+func (handler *saveRumorHandler) ToPeerStatus() *packets_gossiper.PeerStatus {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 

@@ -78,7 +78,7 @@ func (server *WebServer) handleClientPacket() {
 
 func (server *WebServer) handleRumorSubscriptions() {
 	for {
-		rumor, ok := <-server.gossiper.VectorClock().LatestRumorChan
+		rumor, ok := <-server.gossiper.VectorClock.GetLatestRumorChan()
 		if ok {
 			server.allRumors = append(server.allRumors, rumor)
 			for w, c := range server.clients {
@@ -92,7 +92,7 @@ func (server *WebServer) handleRumorSubscriptions() {
 
 func (server *WebServer) handleNodeSubscriptions() {
 	for {
-		peer, ok := <-server.gossiper.PeersSet().PeersChan
+		peer, ok := <-server.gossiper.PeersSet.PeersChan
 		if ok {
 			for w, c := range server.clients {
 				if c.IsSubscribedToNode {
@@ -121,7 +121,12 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 	if packet.IsPostNode() {
-		server.gossiper.PeersSet().AddPeer(packet.PostNode.ToPeer())
+		peer := packet.PostNode.ToPeer()
+		if !peer.Addr.Equals(server.gossiper.Addr) {
+			server.gossiper.PeersSet.AddPeer(peer)
+		} else {
+			common.HandleAbort("cannot add node with same address as gossiper", nil)
+		}
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
 		}
@@ -144,7 +149,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		if !client.IsSubscribedToNode && packet.SubscribeNode.Subscribe {
 			client.IsSubscribedToNode = true
 			if packet.SubscribeNode.WithPrevious {
-				for _, peer := range server.gossiper.PeersSet().GetSlice() {
+				for _, peer := range server.gossiper.PeersSet.GetSlice() {
 					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer.Addr.ToIpPort())))
 				}
 			}
