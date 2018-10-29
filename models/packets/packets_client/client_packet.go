@@ -8,27 +8,18 @@ import (
 
 type ClientPacket struct {
 	GetId            *GetIdPacket            `json:"get-id"`
-	GetMessage       *GetMessagePacket       `json:"get-message"`
 	PostMessage      *PostMessagePacket      `json:"post-message"`
-	GetNode          *GetNodePacket          `json:"get-node"`
 	PostNode         *PostNodePacket         `json:"post-node"`
 	SubscribeMessage *SubscribeMessagePacket `json:"subscribe-message"`
+	SubscribeNode    *SubscribeNodePacket    `json:"subscribe-node"`
 }
 
 func (packet *ClientPacket) IsGetId() bool {
 	return packet.GetId != nil
 }
 
-func (packet *ClientPacket) IsGetMessage() bool {
-	return packet.GetMessage != nil
-}
-
 func (packet *ClientPacket) IsPostMessage() bool {
 	return packet.PostMessage != nil
-}
-
-func (packet *ClientPacket) IsGetNode() bool {
-	return packet.GetNode != nil
 }
 
 func (packet *ClientPacket) IsPostNode() bool {
@@ -39,24 +30,26 @@ func (packet *ClientPacket) IsSubscribeMessage() bool {
 	return packet.SubscribeMessage != nil
 }
 
+func (packet *ClientPacket) IsSubscribeNode() bool {
+	return packet.SubscribeNode != nil
+}
+
 func (packet *ClientPacket) AckPrint() {
+
 	if packet.IsGetId() {
 		packet.GetId.AckPrint()
 	}
-	if packet.IsGetMessage() {
-		packet.GetMessage.AckPrint()
-	}
 	if packet.IsPostMessage() {
 		packet.PostMessage.AckPrint()
-	}
-	if packet.IsGetNode() {
-		packet.GetNode.AckPrint()
 	}
 	if packet.IsPostNode() {
 		packet.PostNode.AckPrint()
 	}
 	if packet.IsSubscribeMessage() {
 		packet.SubscribeMessage.AckPrint()
+	}
+	if packet.IsSubscribeNode() {
+		packet.SubscribeNode.AckPrint()
 	}
 }
 
@@ -65,19 +58,16 @@ func (packet *ClientPacket) Check() error {
 	if packet.IsGetId() {
 		counter += 1
 	}
-	if packet.IsGetMessage() {
-		counter += 1
-	}
 	if packet.IsPostMessage() {
-		counter += 1
-	}
-	if packet.IsGetNode() {
 		counter += 1
 	}
 	if packet.IsPostNode() {
 		counter += 1
 	}
 	if packet.IsSubscribeMessage() {
+		counter += 1
+	}
+	if packet.IsSubscribeNode() {
 		counter += 1
 	}
 	if counter == 1 {
@@ -91,20 +81,17 @@ func (packet ClientPacket) String() string {
 	if packet.IsGetId() {
 		ls = append(ls, packet.GetId.String())
 	}
-	if packet.IsGetMessage() {
-		ls = append(ls, packet.GetMessage.String())
-	}
 	if packet.IsPostMessage() {
 		ls = append(ls, packet.PostMessage.String())
-	}
-	if packet.IsGetNode() {
-		ls = append(ls, packet.GetNode.String())
 	}
 	if packet.IsPostNode() {
 		ls = append(ls, packet.PostNode.String())
 	}
 	if packet.IsSubscribeMessage() {
 		ls = append(ls, packet.SubscribeMessage.String())
+	}
+	if packet.IsSubscribeNode() {
+		ls = append(ls, packet.SubscribeNode.String())
 	}
 	if len(ls) == 0 {
 		common.HandleError(fmt.Errorf("empty client packet"))

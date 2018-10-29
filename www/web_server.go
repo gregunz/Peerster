@@ -9,6 +9,7 @@ import (
 	"github.com/gregunz/Peerster/gossiper"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
+	"github.com/gregunz/Peerster/models/packets/responses_client"
 	"log"
 	"net/http"
 )
@@ -47,10 +48,11 @@ func (server *WebServer) Start() {
 	router.HandleFunc("/id", server.getIdHandler).Methods("GET")
 
 	// Create a simple file server
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui")))
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui/public")))
 
 	go server.handleClientPacket()
 	go server.handleRumorSubscriptions()
+	go server.handleNodeSubscriptions()
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
@@ -81,7 +83,20 @@ func (server *WebServer) handleRumorSubscriptions() {
 			server.allRumors = append(server.allRumors, rumor)
 			for w, c := range server.clients {
 				if c.IsSubscribedToMessage {
-					common.HandleError(w.WriteJSON(rumor))
+					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor)))
+				}
+			}
+		}
+	}
+}
+
+func (server *WebServer) handleNodeSubscriptions() {
+	for {
+		peer, ok := <-server.gossiper.PeersSet().PeersChan
+		if ok {
+			for w, c := range server.clients {
+				if c.IsSubscribedToNode {
+					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer.Addr.ToIpPort())))
 				}
 			}
 		}
@@ -95,11 +110,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	client := server.clients[w]
 
 	if packet.IsGetId() {
-		common.HandleError(w.WriteJSON(server.gossiper.Name))
-		return
-	}
-	if packet.IsGetMessage() {
-		common.HandleError(w.WriteJSON(server.allRumors))
+		common.HandleError(w.WriteJSON(responses_client.NewGetIdResponse(server.gossiper.Name)))
 		return
 	}
 	if packet.IsPostMessage() {
@@ -107,10 +118,6 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
 		}
-		return
-	}
-	if packet.IsGetNode() {
-		common.HandleError(w.WriteJSON(server.gossiper.PeersSet().ToStrings()))
 		return
 	}
 	if packet.IsPostNode() {
@@ -121,13 +128,28 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 	if packet.IsSubscribeMessage() {
-		if !client.IsSubscribedToMessage {
+		if !client.IsSubscribedToMessage && packet.SubscribeMessage.Subscribe {
 			client.IsSubscribedToMessage = true
 			if packet.SubscribeMessage.WithPrevious {
 				for _, rumor := range server.allRumors {
-					common.HandleError(w.WriteJSON(rumor))
+					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor)))
 				}
 			}
+		} else if client.IsSubscribedToMessage && !packet.SubscribeMessage.Subscribe {
+			client.IsSubscribedToMessage = false
+		}
+		return
+	}
+	if packet.IsSubscribeNode() {
+		if !client.IsSubscribedToNode && packet.SubscribeNode.Subscribe {
+			client.IsSubscribedToNode = true
+			if packet.SubscribeNode.WithPrevious {
+				for _, peer := range server.gossiper.PeersSet().GetSlice() {
+					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer.Addr.ToIpPort())))
+				}
+			}
+		} else if client.IsSubscribedToNode && !packet.SubscribeNode.Subscribe {
+			client.IsSubscribedToNode = false
 		}
 		return
 	}
@@ -135,24 +157,26 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	common.HandleAbort("an unexpected event occurred while handling ClientPacket", nil)
 }
 
-func (server *WebServer) handleConnections(w http.ResponseWriter, r *http.Request) {
+func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.Request) {
 	// Upgrade initial GET request to a websocket
-	ws, err := upgrader.Upgrade(w, r, nil)
+	ws, err := upgrader.Upgrade(writer, r, nil)
 	if err != nil {
 		common.HandleAbort("could not upgrade the connection to websocket", err)
 		return
 	}
 
+	w := websocketToWriter(ws)
+	c, ok := server.clients[w]
+
 	// Make sure we close the connection when the function returns
 	defer func() {
 		ws.Close()
-		delete(server.clients, ws)
+		delete(server.clients, w)
 	}()
 
-	c, ok := server.clients[ws]
 	if !ok {
 		c = NewClient()
-		server.clients[ws] = c
+		server.clients[w] = c
 		log.Printf("<web-server> new client just arrived")
 	}
 
@@ -167,7 +191,7 @@ func (server *WebServer) handleConnections(w http.ResponseWriter, r *http.Reques
 		// Send the newly received message to the broadcast channel
 		server.clientChan <- &ClientChannelElement{
 			Packet: &packet,
-			Writer: ws,
+			Writer: w,
 		}
 	}
 
@@ -175,9 +199,17 @@ func (server *WebServer) handleConnections(w http.ResponseWriter, r *http.Reques
 
 func handlerToWriter(w http.ResponseWriter, r *http.Request) Writer {
 	return &ProtoWriter{
-		writeJSON: func(v interface{}) error {
+		writeJSON: func(v *responses_client.ClientResponse) error {
 			w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 			return json.NewEncoder(w).Encode(v)
+		},
+	}
+}
+
+func websocketToWriter(ws *websocket.Conn) Writer {
+	return &ProtoWriter{
+		writeJSON: func(v *responses_client.ClientResponse) error {
+			return ws.WriteJSON(v)
 		},
 	}
 }

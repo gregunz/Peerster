@@ -265,7 +265,7 @@ func (g *Gossiper) sendPacket(packet *packets_gossiper.GossipPacket, to ...*peer
 				g.handleSendPacket(packet, p)
 				g.gossiperConn.WriteToUDP(packetBytes, p.Addr.UDP())
 			} else {
-				common.HandleAbort(fmt.Sprintf("trying to send to peer <%s>", p), nil)
+				//common.HandleAbort(fmt.Sprintf("trying to send to peer <%s>", p), nil)
 			}
 		}(p)
 	}

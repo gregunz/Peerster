@@ -2,10 +2,12 @@ package www
 
 type client struct {
 	IsSubscribedToMessage bool
+	IsSubscribedToNode    bool
 }
 
 func NewClient() *client {
 	return &client{
-		IsSubscribedToMessage: false, // default for now is to be subscribed
+		IsSubscribedToMessage: false,
+		IsSubscribedToNode:    false,
 	}
 }

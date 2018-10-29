@@ -9,8 +9,9 @@ import (
 )
 
 type PeersSet struct {
-	peersMap map[string]*Peer
-	mux      sync.Mutex
+	peersMap  map[string]*Peer
+	PeersChan chan *Peer
+	mux       sync.Mutex
 }
 
 func NewPeersSet(peers ...*Peer) *PeersSet {
@@ -23,11 +24,19 @@ func NewPeersSet(peers ...*Peer) *PeersSet {
 }
 
 func (peersSet *PeersSet) init() {
+	alreadyInit := true
 	if peersSet.peersMap == nil {
 		peersSet.peersMap = make(map[string]*Peer)
-	} else {
+		alreadyInit = false
+	}
+	if peersSet.PeersChan == nil {
+		peersSet.PeersChan = make(chan *Peer, 1)
+		alreadyInit = false
+	}
+	if alreadyInit {
 		common.HandleError(fmt.Errorf("PeersSet already initialized"))
 	}
+
 }
 
 func (peersSet *PeersSet) string() string {
@@ -107,6 +116,7 @@ func (peersSet *PeersSet) addPeer(peer *Peer) {
 		// not overwriting if peer already present
 		common.HandleError(fmt.Errorf("adding a Peer that is already in PeerSet"))
 	} else {
+		go func() { peersSet.PeersChan <- peer }()
 		peersSet.peersMap[peer.ID()] = peer
 	}
 }
