@@ -78,8 +78,8 @@ func (server *WebServer) handleClientPacket() {
 
 func (server *WebServer) handleRumorSubscriptions() {
 	for {
-		rumor, ok := <-server.gossiper.VectorClock.GetLatestRumorChan()
-		if ok {
+		rumor := server.gossiper.RumorChan.GetRumor()
+		if rumor != nil {
 			server.allRumors = append(server.allRumors, rumor)
 			for w, c := range server.clients {
 				if c.IsSubscribedToMessage {
@@ -92,8 +92,8 @@ func (server *WebServer) handleRumorSubscriptions() {
 
 func (server *WebServer) handleNodeSubscriptions() {
 	for {
-		peer, ok := <-server.gossiper.PeersSet.PeersChan
-		if ok {
+		peer := server.gossiper.NodeChan.GetNode()
+		if peer != nil {
 			for w, c := range server.clients {
 				if c.IsSubscribedToNode {
 					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer.Addr.ToIpPort())))
@@ -114,7 +114,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 	if packet.IsPostMessage() {
-		server.gossiper.ClientChan <- packet.PostMessage
+		go func() { server.gossiper.ClientChan <- packet.PostMessage }()
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
 		}

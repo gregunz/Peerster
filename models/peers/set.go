@@ -9,34 +9,26 @@ import (
 )
 
 type Set struct {
-	peersMap  map[string]*Peer
-	PeersChan chan *Peer
-	mux       sync.Mutex
+	peersMap map[string]*Peer
+	nodeChan NodeChan
+	mux      sync.Mutex
 }
 
 func NewSet(peers ...*Peer) *Set {
-	newPeersSet := &Set{}
-	newPeersSet.init()
+	newPeersSet := &Set{
+		peersMap: map[string]*Peer{},
+	}
 	for _, p := range peers {
 		newPeersSet.add(p)
 	}
 	return newPeersSet
 }
 
-func (set *Set) init() {
-	alreadyInit := true
-	if set.peersMap == nil {
-		set.peersMap = make(map[string]*Peer)
-		alreadyInit = false
-	}
-	if set.PeersChan == nil {
-		set.PeersChan = make(chan *Peer, 1)
-		alreadyInit = false
-	}
-	if alreadyInit {
-		common.HandleError(fmt.Errorf("peers Set already initialized"))
-	}
+func (set *Set) SetNodeChan(nodeChan NodeChan) {
+	set.mux.Lock()
+	defer set.mux.Unlock()
 
+	set.nodeChan = nodeChan
 }
 
 func (set *Set) string() string {
@@ -48,20 +40,6 @@ func (set Set) String() string {
 	defer set.mux.Unlock()
 
 	return set.string()
-}
-
-func (set *Set) Set(s string) error {
-	set.mux.Lock()
-	defer set.mux.Unlock()
-
-	if set.peersMap == nil {
-		set.init()
-	}
-
-	for _, ipPort := range strings.Split(s, ",") {
-		set.addIpPort(ipPort)
-	}
-	return nil
 }
 
 func (set *Set) toStrings() []string {
@@ -104,9 +82,6 @@ func (set *Set) AddIpPort(ipPort string) *Peer {
 }
 
 func (set *Set) add(peer *Peer) {
-	if set.peersMap == nil {
-		set.init()
-	}
 	if peer == nil {
 		common.HandleAbort("not adding nil to PeerSet", nil)
 		return
@@ -116,7 +91,9 @@ func (set *Set) add(peer *Peer) {
 		// not overwriting if peer already present
 		common.HandleError(fmt.Errorf("adding a Peer that is already in PeerSet"))
 	} else {
-		go func() { set.PeersChan <- peer }()
+		if set.nodeChan != nil {
+			set.nodeChan.AddNode(peer)
+		}
 		set.peersMap[peer.ID()] = peer
 	}
 }

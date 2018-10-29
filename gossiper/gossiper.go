@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"github.com/dedis/protobuf"
 	"github.com/gregunz/Peerster/common"
-	"github.com/gregunz/Peerster/models/origin_handlers"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
+	"github.com/gregunz/Peerster/models/routing"
+	"github.com/gregunz/Peerster/models/updates"
+	"github.com/gregunz/Peerster/models/vector_clock"
 	"github.com/gregunz/Peerster/utils"
 	"log"
 	"net"
@@ -28,14 +30,17 @@ type Gossiper struct {
 	gossiperConn   *net.UDPConn
 	rTimerDuration time.Duration
 
-	Name         string
-	Addr         *peers.Address
-	GUIPort      uint
-	ClientChan   chan *packets_client.PostMessagePacket
-	GossipChan   chan *GossipChannelElement
-	PeersSet     *peers.Set
-	VectorClock  origin_handlers.VectorClock
-	RoutingTable origin_handlers.RoutingTable
+	Name           string
+	Addr           *peers.Address
+	GUIPort        uint
+	ClientChan     chan *packets_client.PostMessagePacket
+	GossipChan     chan *GossipChannelElement
+	NodeChan       peers.NodeChan
+	RumorChan      vector_clock.RumorChan
+	PrivateMsgChan PrivateMsgChan
+	PeersSet       *peers.Set
+	VectorClock    *vector_clock.VectorClock
+	RoutingTable   *routing.Table
 
 	mux sync.Mutex
 }
@@ -56,7 +61,10 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 	_, peerConn := utils.ConnectToIpPort(address.ToIpPort())
 	_, clientConn := utils.ConnectToIpPort(clientAddr.ToIpPort())
 
-	originToHandlers := origin_handlers.NewOriginToHandlers(name)
+	routingTable := routing.NewTable(name)
+	updatesChannels := updates.NewChannels()
+	vectorClock := vector_clock.NewVectorClock(updatesChannels)
+	peersSet.SetNodeChan(updatesChannels)
 
 	return &Gossiper{
 		mode:           mode,
@@ -65,14 +73,17 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		gossiperConn:   peerConn,
 		rTimerDuration: time.Duration(rTimerDuration) * time.Second,
 
-		Name:         name,
-		Addr:         address,
-		GUIPort:      guiPort,
-		ClientChan:   make(chan *packets_client.PostMessagePacket, 1),
-		GossipChan:   make(chan *GossipChannelElement, 1),
-		PeersSet:     peersSet,
-		VectorClock:  originToHandlers.ToVectorClock(),
-		RoutingTable: originToHandlers.ToRoutingTable(),
+		Name:           name,
+		Addr:           address,
+		GUIPort:        guiPort,
+		ClientChan:     make(chan *packets_client.PostMessagePacket),
+		GossipChan:     make(chan *GossipChannelElement),
+		NodeChan:       updatesChannels,
+		RumorChan:      updatesChannels,
+		PrivateMsgChan: updatesChannels,
+		PeersSet:       peersSet,
+		VectorClock:    vectorClock,
+		RoutingTable:   routingTable,
 	}
 }
 
@@ -248,12 +259,14 @@ func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer 
 }
 
 func (g *Gossiper) handlePrivate(msg *packets_gossiper.PrivateMessage, fromPeer *peers.Peer) {
-	if msg.Origin != g.Name {
+	if msg.Destination != g.Name {
 		msgToSend := msg.Hopped()
 		toPeer := g.RoutingTable.Get(msg.Origin)
 		if msgToSend.HopLimit > 0 && toPeer != nil {
 			go g.sendPacket(msgToSend.ToGossipPacket(), toPeer)
 		}
+	} else {
+		g.PrivateMsgChan.AddPrivateMsg(msg)
 	}
 }
 
@@ -315,7 +328,7 @@ func (g *Gossiper) handleSendPacket(packet *packets_gossiper.GossipPacket, toPee
 	if packet.IsRumor() {
 		packet.Rumor.SendPrintMongering(toPeer)
 
-		// start timeout to this peer
+		// start timeout to this peer if none is already active
 		toPeer.Timeout.SetIfNotActive(timeoutDuration, func() {
 			if flipped := utils.FlipCoin(); flipped {
 				if randomPeer := g.PeersSet.GetRandom(toPeer); randomPeer != nil {
@@ -324,7 +337,12 @@ func (g *Gossiper) handleSendPacket(packet *packets_gossiper.GossipPacket, toPee
 				}
 			}
 		})
+	}
 
+	if packet.IsPrivate() {
+		if packet.Private.Origin == g.Name {
+			g.PrivateMsgChan.AddPrivateMsg(packet.Private)
+		}
 	}
 
 }

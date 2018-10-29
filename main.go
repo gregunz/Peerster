@@ -14,7 +14,7 @@ var guiEnabled bool
 var guiPort uint
 var gossipAddr peers.Address
 var name string
-var peersSet peers.Set
+var peersSet peers.SetVar
 var simple bool
 var rTimerSeconds uint
 
@@ -35,7 +35,7 @@ func main() {
 	parse()
 	var group sync.WaitGroup
 
-	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, guiPort, &peersSet, rTimerSeconds)
+	g := gossiper.NewGossiper(simple, &gossipAddr, name, uiPort, guiPort, peersSet.ToSet(), rTimerSeconds)
 	g.Start(&group)
 
 	if guiEnabled {

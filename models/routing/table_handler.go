@@ -1,4 +1,4 @@
-package origin_handlers
+package routing
 
 import (
 	"fmt"
@@ -7,22 +7,22 @@ import (
 	"sync"
 )
 
-type routingHandler struct {
+type tableHandler struct {
 	origin   string
 	peer     *peers.Peer
 	latestID uint32
 	mux      sync.Mutex
 }
 
-func NewRoutingHandler(origin string) *routingHandler {
-	return &routingHandler{
+func newRoutingTableHandler(origin string) *tableHandler {
+	return &tableHandler{
 		origin:   origin,
 		peer:     nil,
 		latestID: 0,
 	}
 }
 
-func (handler routingHandler) AckRumor(rumor *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
+func (handler tableHandler) AckRumor(rumor *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
