@@ -19,7 +19,7 @@ var timeout_duration = 1 * time.Second
 var anti_entropy_duration = 1 * time.Second
 
 type Gossiper struct {
-	mode          *GossiperMode
+	mode          *Mode
 	clientAddress *peers.Address
 	clientConn    *net.UDPConn
 	gossiperConn  *net.UDPConn
@@ -28,14 +28,14 @@ type Gossiper struct {
 	GUIPort       uint
 	ClientChan    chan *packets_client.PostMessagePacket
 	GossipChan    chan *GossipChannelElement
-	PeersSet      *peers.PeersSet
+	PeersSet      *peers.Set
 	VectorClock   origin_handlers.VectorClock
 	RoutingTable  origin_handlers.RoutingTable
 
 	mux sync.Mutex
 }
 
-func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.PeersSet) *Gossiper {
+func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.Set) *Gossiper {
 
 	log.Printf("Gossiper created: named <%s> listening peers on ip:port <%s> "+
 		"and listening local clients on port <%d> with peers <%s>\n",

@@ -14,7 +14,7 @@ var guiEnabled bool
 var guiPort uint
 var gossipAddr peers.Address
 var name string
-var peersSet peers.PeersSet
+var peersSet peers.Set
 var simple bool
 
 var DefaultIpPort = "127.0.0.1:5000"

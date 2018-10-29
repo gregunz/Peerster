@@ -123,7 +123,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	if packet.IsPostNode() {
 		peer := packet.PostNode.ToPeer()
 		if !peer.Addr.Equals(server.gossiper.Addr) {
-			server.gossiper.PeersSet.AddPeer(peer)
+			server.gossiper.PeersSet.Add(peer)
 		} else {
 			common.HandleAbort("cannot add node with same address as gossiper", nil)
 		}
