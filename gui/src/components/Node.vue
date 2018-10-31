@@ -17,14 +17,14 @@
         </div>
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field col s8">
         <input type="text" v-model="nodeBox" @keyup.enter="sendNodeAndResetBox">
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field col s4">
         <button class="waves-effect waves-light btn" @click="sendNodeAndResetBox">
-          <i class="material-icons right">perm_identity</i>
-          Add Node
+          <i class="material-icons right">router</i>
+          Add
         </button>
       </div>
 
@@ -61,5 +61,7 @@
 </script>
 
 <style scoped>
-
+.card-content {
+  text-align: left;
+}
 </style>

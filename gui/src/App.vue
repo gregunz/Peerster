@@ -3,15 +3,15 @@
     <header>
       <nav>
         <div class="nav-wrapper">
-          <a href="/" class="brand-logo right">connected as <chip :name="myOrigin"></chip></a>
+          <a v-if="myOrigin !== ''" href="/" class="brand-logo right">connected as <chip :name="myOrigin"></chip></a>
         </div>
       </nav>
     </header>
 
     <div class="row">
       <div class="col s8">
-        <chat v-if="selectedDest === ''" title="Rumors" :my-origin="myOrigin" :chat-messages="rumors" :send-msg="sendRumor"></chat>
-        <chat v-else :title="selectedDest" :my-origin="myOrigin" :chat-messages="selectedDestChat" :send-msg="sendPrivate"></chat>
+        <chat v-if="selectedDest === ''" title="Rumors Chat" :my-origin="myOrigin" :chat-messages="rumors" :send-msg="sendRumor"></chat>
+        <chat v-else :dest="selectedDest" :my-origin="myOrigin" :chat-messages="selectedDestChat" :send-msg="sendPrivate"></chat>
       </div>
       <div class="col s4">
         <div class="back-button" v-if="selectedDest !== ''">
@@ -34,6 +34,8 @@ import Chat from "./components/Chat";
 import Node from "./components/Node"
 import Contacts from "./components/Contacts";
 import Chip from "./components/Chip";
+import swal from "sweetalert2"
+
 
 export default {
   name: 'app',
@@ -57,12 +59,29 @@ export default {
     const self = this;
     this.apiURL = window.location.host;
     this.ws = new WebSocket('ws://' + this.apiURL + '/ws');
-    this.ws.onopen = () => {
+    this.ws.addEventListener('open', function () {
       self.ws.send(JSON.stringify({'get-id' : {}})); // getting name
       self.ws.send(JSON.stringify({'subscribe-message' : {'subscribe': true, 'with-previous': true}})); // subscribing to messages
       self.ws.send(JSON.stringify({'subscribe-node' : {'subscribe': true, 'with-previous': true}})); // subscribing to nodes
       self.ws.send(JSON.stringify({'subscribe-origin' : {'subscribe': true, 'with-previous': true}})); // subscribing to origins
-    };
+    });
+    this.ws.addEventListener('close', function () {
+      swal({
+        type: 'error',
+        title: 'server unavailable, try again...',
+        width: 600,
+        padding: '3em',
+        backdrop: `
+          rgba(0,0,123,0.4)
+          url("https://sweetalert2.github.io/images/nyan-cat.gif")
+          center left
+          no-repeat
+        `,
+        showConfirmButton: false,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+      })
+    });
 
     this.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
 
@@ -109,11 +128,11 @@ export default {
       this.ws.send(JSON.stringify(msgPacket));
     },
 
-    sendPrivate: function (privateText) {
+    sendPrivate: function (privateText, dest) {
       const msgPacket = {
         'post-message': {
           'message': privateText,
-          'destination': this.selectedDest,
+          'destination': dest,
         }
       };
       this.ws.send(JSON.stringify(msgPacket));
@@ -218,6 +237,6 @@ main {
   flex: 1 0 auto;
 }
 .back-button {
-  margin-top: 20px;
+  margin-top: 50px;
 }
 </style>

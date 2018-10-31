@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "axios": "^0.18.0",
+    "sweetalert2": "^7.28.11",
     "vue": "^2.5.11"
   },
   "browserslist": [

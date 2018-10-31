@@ -4,7 +4,8 @@
     <div class="row">
 
       <div class="col s12">
-        <h4>{{ title }} Chat</h4>
+        <h4 v-if="title">{{title}}</h4>
+        <h4 v-if="dest">Private chat with <chip :name="dest"></chip></h4>
       </div>
 
       <div class="col s12">
@@ -18,14 +19,14 @@
         </div>
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field col s9">
         <input type="text" v-model="chatBox" @keyup.enter="sendMsgAndResetChatBox">
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field col s3">
         <button class="waves-effect waves-light btn" @click="sendMsgAndResetChatBox">
           <i class="material-icons right">chat</i>
-          Send Message
+          Send
         </button>
       </div>
 
@@ -47,6 +48,7 @@
 
       props: {
         title: String,
+        dest: String,
         myOrigin: String,
         chatMessages: Array,
         sendMsg: Function,
@@ -55,7 +57,7 @@
       methods: {
         sendMsgAndResetChatBox: function () {
           if (this.chatBox !== '') {
-            this.sendMsg(this.chatBox);
+            this.sendMsg(this.chatBox, this.dest);
             this.chatBox = ''; // Reset chatBox
           }
         },
