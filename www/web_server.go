@@ -60,11 +60,13 @@ func (server *WebServer) Start() {
 	router.HandleFunc("/id", server.getIdHandler).Methods("GET")
 
 	// Create a simple file server
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui/public/tmp")))
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui")))
 
 	go server.handleClientPacket()
 	go server.handleRumorSubscriptions()
+	go server.handlePrivateSubscriptions()
 	go server.handleNodeSubscriptions()
+	go server.handleOriginsSubscriptions()
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
@@ -90,12 +92,25 @@ func (server *WebServer) handleClientPacket() {
 
 func (server *WebServer) handleRumorSubscriptions() {
 	for {
-		rumor := server.gossiper.RumorChan.GetRumor()
-		if rumor != nil {
-			server.allRumors = append(server.allRumors, rumor)
+		msg := server.gossiper.RumorChan.GetRumor()
+		if msg != nil {
+			server.allRumors = append(server.allRumors, msg)
 			for w, c := range server.clients {
 				if c.IsSubscribedToMessage {
-					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor, server.policy)))
+					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(msg, server.policy)))
+				}
+			}
+		}
+	}
+}
+
+func (server *WebServer) handlePrivateSubscriptions() {
+	for {
+		msg := server.gossiper.PrivateMsgChan.GetPrivateMsg()
+		if msg != nil {
+			for w, c := range server.clients {
+				if c.IsSubscribedToMessage {
+					common.HandleError(w.WriteJSON(responses_client.NewPrivateResponse(msg, server.policy)))
 				}
 			}
 		}
@@ -115,6 +130,19 @@ func (server *WebServer) handleNodeSubscriptions() {
 	}
 }
 
+func (server *WebServer) handleOriginsSubscriptions() {
+	for {
+		o := server.gossiper.OriginChan.GetOrigin()
+		if o != "" && o != server.gossiper.Name {
+			for w, c := range server.clients {
+				if c.IsSubscribedToOrigin {
+					common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
+				}
+			}
+		}
+	}
+}
+
 func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Writer, isRest bool) {
 
 	packet.AckPrint()
@@ -126,7 +154,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 	if packet.IsPostMessage() {
-		go func() { server.gossiper.ClientChan <- packet.PostMessage }()
+		go func() { server.gossiper.FromClientChan <- packet.PostMessage }()
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
 		}
@@ -151,6 +179,9 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 				for _, rumor := range server.allRumors {
 					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor, server.policy)))
 				}
+				for _, msg := range server.gossiper.Conversations.GetAll() {
+					common.HandleError(w.WriteJSON(responses_client.NewPrivateResponse(msg, server.policy)))
+				}
 			}
 		} else if client.IsSubscribedToMessage && !packet.SubscribeMessage.Subscribe {
 			client.IsSubscribedToMessage = false
@@ -167,6 +198,22 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 			}
 		} else if client.IsSubscribedToNode && !packet.SubscribeNode.Subscribe {
 			client.IsSubscribedToNode = false
+		}
+		return
+	}
+
+	if packet.IsSubscribeOrigin() {
+		if !client.IsSubscribedToOrigin && packet.SubscribeOrigin.Subscribe {
+			client.IsSubscribedToOrigin = true
+			if packet.SubscribeOrigin.WithPrevious {
+				for _, o := range server.gossiper.RoutingTable.GetOrigins() {
+					if o != server.gossiper.Name {
+						common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
+					}
+				}
+			}
+		} else if client.IsSubscribedToOrigin && !packet.SubscribeOrigin.Subscribe {
+			client.IsSubscribedToOrigin = false
 		}
 		return
 	}
@@ -202,8 +249,13 @@ func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.R
 		// Read in a new message as JSON and map it to a Message object
 		err := ws.ReadJSON(&packet)
 		if err != nil {
-			common.HandleAbort("error while reading json of websocket", err)
-			break
+			if _, ok := err.(*websocket.CloseError); ok {
+				common.HandleError(err)
+				break
+			} else {
+				common.HandleAbort("error while reading json of websocket", err)
+				continue
+			}
 		}
 		// Send the newly received message to the broadcast channel
 		server.clientChan <- &ClientChannelElement{
@@ -214,7 +266,7 @@ func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.R
 
 }
 
-func handlerToWriter(w http.ResponseWriter, r *http.Request) Writer {
+func restToWriter(w http.ResponseWriter) Writer {
 	return &ProtoWriter{
 		writeJSON: func(v *responses_client.ClientResponse) error {
 			w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -235,5 +287,5 @@ func (server *WebServer) getIdHandler(w http.ResponseWriter, r *http.Request) {
 	packet := &packets_client.ClientPacket{
 		GetId: &packets_client.GetIdPacket{},
 	}
-	server.handlePacket(packet, handlerToWriter(w, r), true)
+	server.handlePacket(packet, restToWriter(w), true)
 }

@@ -11,10 +11,12 @@ import (
 )
 
 var uiPort uint
+var dest string
 var msg string
 
 func init() {
 	flag.UintVar(&uiPort, "UIPort", 8080, "port for the UI client")
+	flag.StringVar(&dest, "dest", "", "destination for the private message")
 	flag.StringVar(&msg, "msg", "", "message to be sent")
 }
 
@@ -22,7 +24,8 @@ func main() {
 	flag.Parse()
 
 	packet := packets_client.PostMessagePacket{
-		Message: msg,
+		Message:     msg,
+		Destination: dest,
 	}
 
 	// port 0 means that os picks on that is available

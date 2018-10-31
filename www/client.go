@@ -3,11 +3,13 @@ package www
 type client struct {
 	IsSubscribedToMessage bool
 	IsSubscribedToNode    bool
+	IsSubscribedToOrigin  bool
 }
 
 func NewClient() *client {
 	return &client{
 		IsSubscribedToMessage: false,
 		IsSubscribedToNode:    false,
+		IsSubscribedToOrigin:  false,
 	}
 }

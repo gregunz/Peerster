@@ -1,4 +1,4 @@
-package gossiper
+package conv
 
 import "github.com/gregunz/Peerster/models/packets/packets_gossiper"
 

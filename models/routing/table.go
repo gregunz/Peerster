@@ -1,46 +1,50 @@
 package routing
 
 import (
-	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
-	"github.com/gregunz/Peerster/models/peers"
 	"sync"
 )
 
 type Table struct {
-	myOrigin string
-	handlers map[string]*tableHandler
-	mux      sync.Mutex
+	myOrigin   string
+	handlers   map[string]*tableHandler
+	originChan OriginChan
+	mux        sync.Mutex
 }
 
-func NewTable(myOrigin string) *Table {
+func NewTable(myOrigin string, originChan OriginChan) *Table {
 	return &Table{
-		myOrigin: myOrigin,
-		handlers: map[string]*tableHandler{},
+		myOrigin:   myOrigin,
+		handlers:   map[string]*tableHandler{},
+		originChan: originChan,
 	}
 }
 
-func (handler *Table) getOrCreateHandler(origin string) *tableHandler {
-	h, ok := handler.handlers[origin]
+func (table *Table) getOrCreateHandler(origin string) *tableHandler {
+	h, ok := table.handlers[origin]
 	if !ok {
 		h = newRoutingTableHandler(origin)
-		handler.handlers[origin] = h
+		table.handlers[origin] = h
+		if table.myOrigin != origin {
+			table.originChan.AddOrigin(origin)
+		}
 	}
 	return h
 }
 
-func (handler *Table) GetOrCreateHandler(origin string) *tableHandler {
-	handler.mux.Lock()
-	defer handler.mux.Unlock()
+func (table *Table) GetOrCreateHandler(origin string) *tableHandler {
+	table.mux.Lock()
+	defer table.mux.Unlock()
 
-	return handler.getOrCreateHandler(origin)
+	return table.getOrCreateHandler(origin)
 }
 
-func (handler *Table) AckRumor(rumor *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
-	if rumor.Origin != handler.myOrigin {
-		handler.getOrCreateHandler(rumor.Origin).AckRumor(rumor, fromPeer)
+func (table *Table) GetOrigins() []string {
+	table.mux.Lock()
+	defer table.mux.Unlock()
+
+	ls := []string{}
+	for o := range table.handlers {
+		ls = append(ls, o)
 	}
-}
-
-func (handler *Table) Get(origin string) *peers.Peer {
-	return handler.getOrCreateHandler(origin).peer
+	return ls
 }

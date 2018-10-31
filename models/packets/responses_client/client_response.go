@@ -11,6 +11,7 @@ type ClientResponse struct {
 	Peer    *PeerResponse                    `json:"peer"`
 	Rumor   *packets_gossiper.RumorMessage   `json:"rumor"`
 	Private *packets_gossiper.PrivateMessage `json:"private"`
+	Contact *ContactResponse                 `json:"contact"`
 }
 
 func NewGetIdResponse(id string, policy *bluemonday.Policy) *ClientResponse {
@@ -32,9 +33,15 @@ func NewRumorResponse(msg *packets_gossiper.RumorMessage, policy *bluemonday.Pol
 func NewPrivateResponse(msg *packets_gossiper.PrivateMessage, policy *bluemonday.Policy) *ClientResponse {
 	return &ClientResponse{Private: &packets_gossiper.PrivateMessage{
 		Origin:      policy.Sanitize(msg.Origin),
-		Id:          msg.Id,
+		ID:          msg.ID,
 		Text:        policy.Sanitize(msg.Text),
 		Destination: policy.Sanitize(msg.Destination),
 		HopLimit:    msg.HopLimit,
 	}}
+}
+
+func NewContactResponse(origin string, policy *bluemonday.Policy) *ClientResponse {
+	return &ClientResponse{
+		Contact: &ContactResponse{Origin: policy.Sanitize(origin)},
+	}
 }

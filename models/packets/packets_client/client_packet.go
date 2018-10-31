@@ -12,6 +12,7 @@ type ClientPacket struct {
 	PostNode         *PostNodePacket         `json:"post-node"`
 	SubscribeMessage *SubscribeMessagePacket `json:"subscribe-message"`
 	SubscribeNode    *SubscribeNodePacket    `json:"subscribe-node"`
+	SubscribeOrigin  *SubscribeOriginPacket  `json:"subscribe-origin"`
 }
 
 func (packet *ClientPacket) IsGetId() bool {
@@ -34,6 +35,10 @@ func (packet *ClientPacket) IsSubscribeNode() bool {
 	return packet.SubscribeNode != nil
 }
 
+func (packet *ClientPacket) IsSubscribeOrigin() bool {
+	return packet.SubscribeOrigin != nil
+}
+
 func (packet *ClientPacket) AckPrint() {
 
 	if packet.IsGetId() {
@@ -50,6 +55,9 @@ func (packet *ClientPacket) AckPrint() {
 	}
 	if packet.IsSubscribeNode() {
 		packet.SubscribeNode.AckPrint()
+	}
+	if packet.IsSubscribeOrigin() {
+		packet.SubscribeOrigin.AckPrint()
 	}
 }
 
@@ -68,6 +76,9 @@ func (packet *ClientPacket) Check() error {
 		counter += 1
 	}
 	if packet.IsSubscribeNode() {
+		counter += 1
+	}
+	if packet.IsSubscribeOrigin() {
 		counter += 1
 	}
 	if counter == 1 {
@@ -92,6 +103,9 @@ func (packet ClientPacket) String() string {
 	}
 	if packet.IsSubscribeNode() {
 		ls = append(ls, packet.SubscribeNode.String())
+	}
+	if packet.IsSubscribeOrigin() {
+		ls = append(ls, packet.SubscribeOrigin.String())
 	}
 	if len(ls) == 0 {
 		common.HandleError(fmt.Errorf("empty client packet"))

@@ -4,9 +4,9 @@ import "fmt"
 
 type PrivateMessage struct {
 	Origin      string `json:"origin"`
-	Id          uint32 `json:"id"`
+	ID          uint32 `json:"id"`
 	Text        string `json:"text"`
-	Destination string `json:"dest"`
+	Destination string `json:"destination"`
 	HopLimit    uint32 `json:"hop-limit"`
 }
 
@@ -23,13 +23,13 @@ func (msg *PrivateMessage) ToGossipPacket() *GossipPacket {
 }
 
 func (msg PrivateMessage) String() string {
-	return fmt.Sprintf("PRIVATE origin %s hop-limit %d contents %s", msg.Origin, msg.HopLimit, msg.Text)
+	return fmt.Sprintf("PRIVATE origin %s hop-limit %d contents %s to %s", msg.Origin, msg.HopLimit, msg.Text, msg.Destination)
 }
 
 func (msg *PrivateMessage) Hopped() *PrivateMessage {
 	return &PrivateMessage{
 		Origin:      msg.Origin,
-		Id:          msg.Id,
+		ID:          msg.ID,
 		Text:        msg.Text,
 		Destination: msg.Destination,
 		HopLimit:    msg.HopLimit - 1,

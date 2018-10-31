@@ -48,14 +48,6 @@ func (vector *VectorClock) ToStatusPacket() *packets_gossiper.StatusPacket {
 	}
 }
 
-func (vector *VectorClock) Save(msg *packets_gossiper.RumorMessage) bool {
-	vector.mux.Lock()
-	defer vector.mux.Unlock()
-
-	h := vector.getOrCreateHandler(msg.Origin)
-	return h.Save(msg)
-}
-
 func (vector *VectorClock) Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool) {
 	vector.mux.Lock()
 	defer vector.mux.Unlock()

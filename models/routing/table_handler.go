@@ -22,7 +22,7 @@ func newRoutingTableHandler(origin string) *tableHandler {
 	}
 }
 
-func (handler tableHandler) AckRumor(rumor *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
+func (handler *tableHandler) AckRumor(rumor *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
@@ -31,4 +31,11 @@ func (handler tableHandler) AckRumor(rumor *packets_gossiper.RumorMessage, fromP
 		handler.peer = fromPeer
 		fmt.Printf("DSDV %s %s\n", handler.origin, handler.peer.Addr.ToIpPort())
 	}
+}
+
+func (handler *tableHandler) GetPeer() *peers.Peer {
+	handler.mux.Lock()
+	defer handler.mux.Unlock()
+
+	return handler.peer
 }

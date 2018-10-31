@@ -22,10 +22,7 @@ func newVectorClockHandler(origin string, rumorChan RumorChan) *vectorClockHandl
 	}
 }
 
-func (handler *vectorClockHandler) Save(msg *packets_gossiper.RumorMessage) bool {
-	handler.mux.Lock()
-	defer handler.mux.Unlock()
-
+func (handler *vectorClockHandler) save(msg *packets_gossiper.RumorMessage) bool {
 	_, ok := handler.messages[msg.ID]
 	if !ok {
 		handler.messages[msg.ID] = msg
@@ -45,6 +42,13 @@ func (handler *vectorClockHandler) Save(msg *packets_gossiper.RumorMessage) bool
 	return !ok
 }
 
+func (handler *vectorClockHandler) Save(msg *packets_gossiper.RumorMessage) bool {
+	handler.mux.Lock()
+	defer handler.mux.Unlock()
+
+	return handler.save(msg)
+}
+
 func (handler *vectorClockHandler) CreateAndSaveNextMessage(content string) *packets_gossiper.RumorMessage {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
@@ -55,8 +59,8 @@ func (handler *vectorClockHandler) CreateAndSaveNextMessage(content string) *pac
 		ID:     handler.latestID,
 		Text:   content,
 	}
-	handler.messages[handler.latestID] = msg
-	handler.AddToLatest(msg)
+	handler.save(msg)
+
 	return msg
 }
 

@@ -9,6 +9,7 @@ type UpdateChannels struct {
 	rumorMsg   chan *packets_gossiper.RumorMessage
 	node       chan *peers.Peer
 	privateMsg chan *packets_gossiper.PrivateMessage
+	origin     chan string
 	activated  bool
 }
 
@@ -17,6 +18,7 @@ func NewChannels() *UpdateChannels {
 		rumorMsg:   make(chan *packets_gossiper.RumorMessage),
 		node:       make(chan *peers.Peer),
 		privateMsg: make(chan *packets_gossiper.PrivateMessage),
+		origin:     make(chan string),
 		activated:  true,
 	}
 }
@@ -67,4 +69,20 @@ func (ch *UpdateChannels) GetNode() *peers.Peer {
 		}
 	}
 	return nil
+}
+
+func (ch *UpdateChannels) AddOrigin(o string) {
+	if ch.activated {
+		go func() { ch.origin <- o }()
+	}
+}
+
+func (ch *UpdateChannels) GetOrigin() string {
+	if ch.activated {
+		o, ok := <-ch.origin
+		if ok {
+			return o
+		}
+	}
+	return ""
 }
