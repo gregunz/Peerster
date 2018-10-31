@@ -10,6 +10,7 @@ import (
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/packets/responses_client"
+	"github.com/microcosm-cc/bluemonday"
 	"log"
 	"net/http"
 )
@@ -18,7 +19,9 @@ type WebServer struct {
 	gossiper   *gossiper.Gossiper
 	clientChan chan *ClientChannelElement
 	allRumors  []*packets_gossiper.RumorMessage
+	allPrivate []*packets_gossiper.PrivateMessage
 	clients    map[Writer]*client
+	policy     *bluemonday.Policy
 }
 
 // Configure the upgrader
@@ -29,11 +32,20 @@ var upgrader = websocket.Upgrader{
 }
 
 func NewWebServer(g *gossiper.Gossiper) *WebServer {
+	p := bluemonday.NewPolicy()
+	// Require URLs to be parseable by net/url.Parse and either:
+	//   mailto: http:// or https://
+	p.AllowStandardURLs()
+	// We only allow <p> and <a href="">
+	p.AllowAttrs("href").OnElements("a")
+	p.AllowElements("p")
+
 	return &WebServer{
 		gossiper:   g,
 		clientChan: make(chan *ClientChannelElement, 1),
 		allRumors:  []*packets_gossiper.RumorMessage{},
 		clients:    map[Writer]*client{},
+		policy:     p,
 	}
 }
 
@@ -48,7 +60,7 @@ func (server *WebServer) Start() {
 	router.HandleFunc("/id", server.getIdHandler).Methods("GET")
 
 	// Create a simple file server
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui/public")))
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui/public/tmp")))
 
 	go server.handleClientPacket()
 	go server.handleRumorSubscriptions()
@@ -83,7 +95,7 @@ func (server *WebServer) handleRumorSubscriptions() {
 			server.allRumors = append(server.allRumors, rumor)
 			for w, c := range server.clients {
 				if c.IsSubscribedToMessage {
-					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor)))
+					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor, server.policy)))
 				}
 			}
 		}
@@ -96,7 +108,7 @@ func (server *WebServer) handleNodeSubscriptions() {
 		if peer != nil {
 			for w, c := range server.clients {
 				if c.IsSubscribedToNode {
-					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer.Addr.ToIpPort())))
+					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer, server.policy)))
 				}
 			}
 		}
@@ -110,7 +122,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	client := server.clients[w]
 
 	if packet.IsGetId() {
-		common.HandleError(w.WriteJSON(responses_client.NewGetIdResponse(server.gossiper.Name)))
+		common.HandleError(w.WriteJSON(responses_client.NewGetIdResponse(server.gossiper.Name, server.policy)))
 		return
 	}
 	if packet.IsPostMessage() {
@@ -122,10 +134,10 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	}
 	if packet.IsPostNode() {
 		peer := packet.PostNode.ToPeer()
-		if !peer.Addr.Equals(server.gossiper.Addr) {
+		if peer != nil && !server.gossiper.Addr.Equals(peer.Addr) {
 			server.gossiper.PeersSet.Add(peer)
 		} else {
-			common.HandleAbort("cannot add node with same address as gossiper", nil)
+			common.HandleAbort("cannot add node", nil)
 		}
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
@@ -137,7 +149,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 			client.IsSubscribedToMessage = true
 			if packet.SubscribeMessage.WithPrevious {
 				for _, rumor := range server.allRumors {
-					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor)))
+					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor, server.policy)))
 				}
 			}
 		} else if client.IsSubscribedToMessage && !packet.SubscribeMessage.Subscribe {
@@ -150,7 +162,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 			client.IsSubscribedToNode = true
 			if packet.SubscribeNode.WithPrevious {
 				for _, peer := range server.gossiper.PeersSet.GetSlice() {
-					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer.Addr.ToIpPort())))
+					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer, server.policy)))
 				}
 			}
 		} else if client.IsSubscribedToNode && !packet.SubscribeNode.Subscribe {
