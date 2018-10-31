@@ -3,67 +3,53 @@
     <header>
       <nav>
         <div class="nav-wrapper">
-          <a href="/" class="brand-logo right">Gossiper {{ name }}</a>
+          <a href="/" class="brand-logo right">connected as <chip :name="myOrigin"></chip></a>
         </div>
       </nav>
     </header>
+
     <div class="row">
-      <div class="col s12">
-        <div class="card horizontal">
-          <div id="chat-messages" class="card-content">
-            <div v-for="message in chatMessages" :class="[(message.origin === name) ? 'chat-message-me' : 'chat-message-others']" >
-              <div class="chip">
-                <img :src="avatarURL(message.origin)"/>
-                {{ message.origin }}
-              </div>
-              <span v-html="message.text"></span>
-            </div>
-          </div>
+      <div class="col s8">
+        <chat v-if="selectedDest === ''" title="Rumors" :my-origin="myOrigin" :chat-messages="rumors" :send-msg="sendRumor"></chat>
+        <chat v-else :title="selectedDest" :my-origin="myOrigin" :chat-messages="selectedDestChat" :send-msg="sendPrivate"></chat>
+      </div>
+      <div class="col s4">
+        <div class="back-button" v-if="selectedDest !== ''">
+          <button class="waves-effect waves-light btn" @click="backToRumors()">
+            <i class="material-icons right"></i>
+            Back to Rumors
+          </button>
         </div>
+        <contacts :origins="origins" :on-contact-click="onContactClick"></contacts>
+        <node :nodes="nodes" :send-node="sendNode"></node>
       </div>
     </div>
-    <div class="row">
-      <div class="input-field col s8">
-        <input type="text" v-model="chatBox" @keyup.enter="sendMsg">
-      </div>
-      <div class="input-field col s4">
-        <button class="waves-effect waves-light btn" @click="sendMsg">
-          <i class="material-icons right">chat</i>
-          Send Message
-        </button>
-      </div>
-    </div>
-    <div class="row">
-      <div class="input-field col s4">
-        <input type="text" v-model="nodeBox" @keyup.enter="sendNode">
-      </div>
-      <div class="input-field col s4">
-        <button class="waves-effect waves-light btn" @click="sendNode">
-          <i class="material-icons right">perm_identity</i>
-          Send Node
-        </button>
-      </div>
-    </div>
-    <div class="row">
-      <div v-for="node in nodes">
-        {{ node.address }}
-      </div>
-    </div>
+
+
   </div>
 </template>
 
 <script>
+import Chat from "./components/Chat";
+import Node from "./components/Node"
+import Contacts from "./components/Contacts";
+import Chip from "./components/Chip";
+
 export default {
   name: 'app',
+  components: {Chip, Contacts, Chat, Node},
   data () {
     return {
       apiURL: '',
-      ws: null, // Our websocket
-      chatBox: '', // Holds new messages to be sent to the server
-      chatMessages: [], // chat messages list
-      nodeBox: '',
+      ws: null, // websocket
+      rumors: [],
+      privates: new Map(),
+      selectedDest: '',
+      selectedDestChat: [],
       nodes: [],
-      name: '',
+      origins: [],
+      myOrigin: '',
+      privateMsgBuffer: [],
     }
   },
 
@@ -75,29 +61,37 @@ export default {
       self.ws.send(JSON.stringify({'get-id' : {}})); // getting name
       self.ws.send(JSON.stringify({'subscribe-message' : {'subscribe': true, 'with-previous': true}})); // subscribing to messages
       self.ws.send(JSON.stringify({'subscribe-node' : {'subscribe': true, 'with-previous': true}})); // subscribing to nodes
+      self.ws.send(JSON.stringify({'subscribe-origin' : {'subscribe': true, 'with-previous': true}})); // subscribing to origins
     };
 
     this.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
 
       const packet = JSON.parse(e.data);
+      console.log(packet);
 
       if (packet['get-id']) {
-        self.name = packet['get-id'].id;
+        self.handleGetId(packet['get-id']);
         return;
       }
 
       if (packet.rumor) { // rumor message packet
-        const rumorMsg = packet.rumor;
-        self.saveMsg(rumorMsg.text, rumorMsg.origin);
+        self.rumors.push(packet.rumor);
         return;
       }
 
       if (packet.private) {
+        const msg = packet.private;
+        self.handlePrivateMsg(msg);
         return;
       }
 
       if (packet.peer) { // node packet
-        self.nodes.push(packet.peer);
+        self.handlePeer(packet.peer);
+        return;
+      }
+
+      if (packet.contact) {
+        self.handleContact(packet.contact);
         return;
       }
 
@@ -106,48 +100,82 @@ export default {
   },
 
   methods: {
-    sendMsg: function () {
-      if (this.chatBox !== '') {
-        const msgPacket = {
-          'post-message': {
-            'message': this.chatBox,
-          }
-        };
-        this.ws.send(JSON.stringify(msgPacket));
-        this.chatBox = ''; // Reset chatBox
-      }
+    sendRumor: function (rumorText) {
+      const msgPacket = {
+        'post-message': {
+          'message': rumorText,
+        }
+      };
+      this.ws.send(JSON.stringify(msgPacket));
     },
 
-    sendNode: function () {
-      if (this.nodeBox !== '') {
-        const nodePacket = {
-          'post-node': {
-            'node': this.nodeBox
-          }
-        };
-        this.ws.send(JSON.stringify(nodePacket));
-        this.nodeBox = ''; // Reset chatBox
-      }
+    sendPrivate: function (privateText) {
+      const msgPacket = {
+        'post-message': {
+          'message': privateText,
+          'destination': this.selectedDest,
+        }
+      };
+      this.ws.send(JSON.stringify(msgPacket));
     },
 
-    saveMsg: function (text, name) {
-      this.chatMessages.push({
-        text: text,
-        origin: name,
-      });
+    onContactClick: function (contact) {
+      this.selectedDest = contact;
+      this.selectedDestChat = this.privates.get(contact);
+    },
+
+    backToRumors: function () {
+      this.selectedDest = '';
+      this.selectedDestChat = null;
+    },
+
+    sendNode: function (nodeText) {
+      const nodePacket = {
+        'post-node': {
+          'node': nodeText
+        }
+      };
+      this.ws.send(JSON.stringify(nodePacket));
+    },
+
+    handleGetId: function (get_id) {
       const self = this;
-      setTimeout(function () {
-        self.scrollToTop('chat-messages')
-      }, 1);
+      self.myOrigin = get_id.id;
+      self.privateMsgBuffer.forEach(function (msg) {
+        self.handlePrivateMsg(msg)
+      });
     },
 
-    scrollToTop: function (id) {
-      const element = document.getElementById(id);
-      element.scrollTop = element.scrollHeight; // Auto scroll to the bottom
+    handlePrivateMsg: function (msg) {
+      const self = this;
+      if (self.privates.has(msg.origin)){
+        self.privates.get(msg.origin).push(msg);
+      } else if (self.privates.has(msg.destination)) {
+        self.privates.get(msg.destination).push(msg);
+      } else if (msg.origin === self.myOrigin) {
+        self.privates.set(msg.destination, [msg])
+      } else if (msg.destination === self.myOrigin) {
+        self.privates.set(msg.origin, [msg])
+      } else if (self.myOrigin === '') {
+        self.privateMsgBuffer.push(msg);
+      } else {
+        console.log("strange private message: " + JSON.stringify(msg));
+      }
     },
 
-    avatarURL: function(name) {
-      return 'https://api.adorable.io/avatars/100/' + name;
+    handlePeer: function (peer) {
+      const self = this;
+      self.nodes.push(peer);
+    },
+
+    handleContact: function (contact) {
+      const self = this;
+      if (contact.origin !== self.myOrigin) {
+        self.origins.push(contact.origin);
+        if (!self.privates.has(contact.origin)){
+          self.privates.set(contact.origin, [])
+        }
+      }
     }
   }
 }
@@ -189,16 +217,7 @@ a {
 main {
   flex: 1 0 auto;
 }
-
-#chat-messages {
-  min-height: 10vh;
-  height: 60vh;
-  width: 100%;
-  overflow-y: scroll;
+.back-button {
+  margin-top: 20px;
 }
-
-.chat-message-me {
-  text-align: right;
-}
-
 </style>
