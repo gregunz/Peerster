@@ -133,7 +133,7 @@ func (server *WebServer) handleNodeSubscriptions() {
 func (server *WebServer) handleOriginsSubscriptions() {
 	for {
 		o := server.gossiper.OriginChan.GetOrigin()
-		if o != "" && o != server.gossiper.Name {
+		if o != "" && o != server.gossiper.Origin {
 			for w, c := range server.clients {
 				if c.IsSubscribedToOrigin {
 					common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
@@ -150,7 +150,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	client := server.clients[w]
 
 	if packet.IsGetId() {
-		common.HandleError(w.WriteJSON(responses_client.NewGetIdResponse(server.gossiper.Name, server.policy)))
+		common.HandleError(w.WriteJSON(responses_client.NewGetIdResponse(server.gossiper.Origin, server.policy)))
 		return
 	}
 	if packet.IsPostMessage() {
@@ -162,7 +162,9 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 	}
 	if packet.IsPostNode() {
 		peer := packet.PostNode.ToPeer()
-		if peer != nil && !server.gossiper.Addr.Equals(peer.Addr) {
+		if peer != nil &&
+			!server.gossiper.GossipAddr.Equals(peer.Addr) &&
+			!server.gossiper.ClientAddr.Equals(peer.Addr) {
 			server.gossiper.PeersSet.Add(peer)
 		} else {
 			common.HandleAbort("cannot add node", nil)
@@ -207,7 +209,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 			client.IsSubscribedToOrigin = true
 			if packet.SubscribeOrigin.WithPrevious {
 				for _, o := range server.gossiper.RoutingTable.GetOrigins() {
-					if o != server.gossiper.Name {
+					if o != server.gossiper.Origin {
 						common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
 					}
 				}

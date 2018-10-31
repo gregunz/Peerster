@@ -1,6 +1,6 @@
 package peers
 
 type NodeChan interface {
-	AddNode(r *Peer)
+	AddNode(*Peer)
 	GetNode() *Peer
 }
