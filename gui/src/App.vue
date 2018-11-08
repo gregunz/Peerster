@@ -20,7 +20,7 @@
             Back to Rumors
           </button>
         </div>
-        <contacts :origins="origins" :on-contact-click="onContactClick"></contacts>
+        <contacts :origins-and-badges="originsAndBadges" :on-contact-click="onContactClick"></contacts>
         <node :nodes="nodes" :send-node="sendNode"></node>
       </div>
     </div>
@@ -49,7 +49,7 @@ export default {
       selectedDest: '',
       selectedDestChat: [],
       nodes: [],
-      origins: [],
+      originsAndBadges: [],
       myOrigin: '',
       privateMsgBuffer: [],
     }
@@ -140,7 +140,16 @@ export default {
 
     onContactClick: function (contact) {
       this.selectedDest = contact;
-      this.selectedDestChat = this.privates.get(contact);
+      this.selectedDestChat = this.privates.get(contact).messages;
+      this.setNumUnread(contact, 0);
+    },
+
+    setNumUnread: function(contact, numUnread) {
+      this.originsAndBadges.forEach(function (o) {
+        if (o.origin === contact){
+          o.numUnread = numUnread;
+        }
+      });
     },
 
     backToRumors: function () {
@@ -160,26 +169,50 @@ export default {
     handleGetId: function (get_id) {
       const self = this;
       self.myOrigin = get_id.id;
-      self.privateMsgBuffer.forEach(function (msg) {
-        self.handlePrivateMsg(msg)
-      });
+      self.privateMsgBuffer.forEach(self.handlePrivateMsg);
     },
 
     handlePrivateMsg: function (msg) {
       const self = this;
       if (self.privates.has(msg.origin)){
-        self.privates.get(msg.origin).push(msg);
+        self.addPrivateMsg(msg.origin, msg);
       } else if (self.privates.has(msg.destination)) {
-        self.privates.get(msg.destination).push(msg);
+        self.addPrivateMsg(msg.destination, msg);
       } else if (msg.origin === self.myOrigin) {
-        self.privates.set(msg.destination, [msg])
+        self.addPrivateMsg(msg.destination, msg);
       } else if (msg.destination === self.myOrigin) {
-        self.privates.set(msg.origin, [msg])
+        self.addPrivateMsg(msg.origin, msg);
       } else if (self.myOrigin === '') {
         self.privateMsgBuffer.push(msg);
       } else {
         console.log("strange private message: " + JSON.stringify(msg));
       }
+    },
+
+    addPrivateMsg: function (contact, msg) {
+      const self = this;
+      if (self.privates.has(contact)) {
+        self.privates.get(contact).messages.push(msg);
+        if (msg.origin !== self.myOrigin) {
+          self.originsAndBadges.forEach(function (o) {
+            if (o.origin === contact){
+              o.numUnread += 1;
+            }
+          })
+        }
+      } else {
+        self.privates.set(contact, self.newPrivateObject(msg))
+      }
+    },
+
+    newPrivateObject: function (msg) {
+      let messagesArray = [];
+      if (msg) {
+        messagesArray.push(msg);
+      }
+      return {
+        messages: messagesArray,
+      };
     },
 
     handlePeer: function (peer) {
@@ -190,10 +223,17 @@ export default {
     handleContact: function (contact) {
       const self = this;
       if (contact.origin !== self.myOrigin) {
-        self.origins.push(contact.origin);
+        self.originsAndBadges.push(self.newOriginObject(contact.origin));
         if (!self.privates.has(contact.origin)){
-          self.privates.set(contact.origin, [])
+          self.privates.set(contact.origin, self.newPrivateObject())
         }
+      }
+    },
+
+    newOriginObject: function (origin) {
+      return {
+        origin: origin,
+        numUnread: 0,
       }
     }
   }

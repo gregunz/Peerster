@@ -8,10 +8,11 @@
     <div class="col s12">
       <div class="card horizontal">
         <div class="card-content">
-          <div v-for="o of origins" v-on:click="onContactClick(o)">
-            <chip :name="o"></chip>
+          <div v-for="o of originsAndBadges" v-on:click="onContactClick(o.origin)">
+            <chip :name="o.origin"></chip>
+            <span class="new badge" v-if="o.numUnread > 0">{{toBadgeString(o.numUnread)}}</span>
           </div>
-        </div>
+      </div>
       </div>
     </div>
 
@@ -24,9 +25,18 @@
       name: "Contacts",
       components: {Chip},
       props: {
-        origins: Array,
+        originsAndBadges: Array,
         onContactClick: Function,
       },
+      methods: {
+        toBadgeString: function(numUnread) {
+          if (numUnread > 9) {
+            return '+';
+          } else {
+            return numUnread;
+          }
+        }
+      }
     }
 </script>
 
