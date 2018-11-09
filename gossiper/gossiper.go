@@ -132,7 +132,7 @@ func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 		}
 		if packet.IsPostMessage() {
 			if packet.PostMessage.Message != "" {
-				g.FromClientChan <- packet
+				g.FromClientChan <- &packet
 			}
 		}
 	})
@@ -174,14 +174,14 @@ func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
 	ticker := time.NewTicker(antiEntropyDuration)
 	for range ticker.C {
 		if randomPeer := g.PeersSet.GetRandom(); randomPeer != nil {
-			go g.sendPacket(g.VectorClock.ToStatusPacket().ToGossipPacket(), g.PeersSet.GetRandom())
+			go g.sendPacket(g.VectorClock.ToStatusPacket(), g.PeersSet.GetRandom())
 		}
 	}
 }
 
 func (g *Gossiper) broadcastRoutePacket() {
 	routePacket := g.VectorClock.GetOrCreateHandler(g.Origin).CreateAndSaveNextMessage("")
-	go g.sendPacket(routePacket.ToGossipPacket(), g.PeersSet.GetSlice()...)
+	go g.sendPacket(routePacket, g.PeersSet.GetSlice()...)
 }
 
 func (g *Gossiper) routeRumorTicker(group *sync.WaitGroup) {
@@ -202,90 +202,42 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 
 		go func() {
 			packet.AckPrint()
-			if g.mode.isSimple() {
-				msg := &packets_gossiper.SimpleMessage{
-					Contents:      packet.Message,
-					RelayPeerAddr: g.GossipAddr.ToIpPort(),
-					OriginalName:  g.Origin,
-				}
-				go g.sendPacket(msg.ToGossipPacket(), g.PeersSet.GetSlice()...)
-			} else if packet.Destination == "" {
-				meHandler := g.VectorClock.GetOrCreateHandler(g.Origin)
-				rumorMessage := meHandler.CreateAndSaveNextMessage(packet.Message)
-
-				if randomPeer := g.PeersSet.GetRandom(); randomPeer != nil {
-					go g.sendPacket(rumorMessage.ToGossipPacket(), randomPeer)
-				}
-			} else {
-				meHandler := g.Conversations.GetOrCreateHandler(g.Origin)
-				msg := meHandler.CreateAndSaveNextMessage(packet.Message, packet.Destination, hopLimit)
-				toPeer := g.RoutingTable.GetOrCreateHandler(msg.Destination).GetPeer()
-				if msg.Destination != g.Origin && toPeer != nil {
-					go g.sendPacket(msg.ToGossipPacket(), toPeer)
-				}
+			if g.mode.isSimple() && packet.IsPostMessage() { // SIMPLE MODE
+				g.handleClientSimpleMode(packet)
+			} else { // NORMAL MODE
+				g.handleClientNormalMode(packet)
 			}
 		}()
 	}
 }
 
-func (g *Gossiper) handleSimple(msg *packets_gossiper.SimpleMessage, fromPeer *peers.Peer) {
-	msgToSend := &packets_gossiper.SimpleMessage{
-		Contents:      msg.Contents,
+func (g *Gossiper) handleClientSimpleMode(packet *packets_client.ClientPacket) {
+	msg := &packets_gossiper.SimpleMessage{
+		Contents:      packet.PostMessage.Message,
 		RelayPeerAddr: g.GossipAddr.ToIpPort(),
-		OriginalName:  msg.OriginalName,
+		OriginalName:  g.Origin,
 	}
-	toPeers := g.PeersSet.Filter(fromPeer).GetSlice() // not resending to sender
-
-	go g.sendPacket(msgToSend.ToGossipPacket(), toPeers...)
+	go g.sendPacket(msg, g.PeersSet.GetSlice()...)
 }
 
-func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
-
-	// saving message
-	g.VectorClock.GetOrCreateHandler(msg.Origin).Save(msg)
-	g.RoutingTable.GetOrCreateHandler(msg.Origin).AckRumor(msg, fromPeer)
-
-	msgToSend := &packets_gossiper.RumorMessage{
-		ID:     msg.ID,
-		Text:   msg.Text,
-		Origin: msg.Origin,
-	}
-
-	// sendPacket to a random peer TODO: ASK IF WE MUST EXCLUDE fromPeer
-	if randomPeer := g.PeersSet.GetRandom(fromPeer); randomPeer != nil {
-		go g.sendPacket(msgToSend.ToGossipPacket(), randomPeer)
-	}
-
-	// send back status packet to sender (= ack of the rumor)
-	go g.sendPacket(g.VectorClock.ToStatusPacket().ToGossipPacket(), fromPeer)
-}
-
-func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer *peers.Peer) {
-	rumorMsg, remoteHasMsg := g.VectorClock.Compare(packet.ToMap())
-
-	if rumorMsg != nil { // has a msg to send
-		go g.sendPacket(rumorMsg.ToGossipPacket(), fromPeer) // send the new message
-	}
-	if remoteHasMsg { // remote has new message
-		go g.sendPacket(g.VectorClock.ToStatusPacket().ToGossipPacket(), fromPeer) // send status to remote
-	}
-	if rumorMsg == nil && !remoteHasMsg { // is up to date
-		fromPeer.Timeout.Trigger()
-		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
-	} else {
-		fromPeer.Timeout.Cancel()
-	}
-}
-
-func (g *Gossiper) handlePrivate(msg *packets_gossiper.PrivateMessage) {
-	if msg.Destination != g.Origin {
-		msgToSend := msg.Hopped()
-		toPeer := g.RoutingTable.GetOrCreateHandler(msg.Destination).GetPeer()
-		if msgToSend.HopLimit > 0 && toPeer != nil {
-			go g.sendPacket(msgToSend.ToGossipPacket(), toPeer)
+func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
+	if packet.IsPostMessage() && packet.PostMessage.Destination == "" {
+		meHandler := g.VectorClock.GetOrCreateHandler(g.Origin)
+		rumorMessage := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message)
+		if randomPeer := g.PeersSet.GetRandom(); randomPeer != nil {
+			go g.sendPacket(rumorMessage, randomPeer)
 		}
-	} else {
-		g.Conversations.GetOrCreateHandler(msg.Origin).Save(msg)
+	} else if packet.IsPostMessage() && packet.PostMessage.Destination != "" {
+		meHandler := g.Conversations.GetOrCreateHandler(g.Origin)
+		msg := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message, packet.PostMessage.Destination, hopLimit)
+		toPeer := g.RoutingTable.GetOrCreateHandler(msg.Destination).GetPeer()
+		if msg.Destination != g.Origin && toPeer != nil {
+			go g.sendPacket(msg, toPeer)
+		}
+	} else if packet.IsRequestFile() {
+
+	} else if packet.IsIndexFile() {
+
 	}
 }
 
@@ -301,23 +253,82 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 
 			if packet.IsSimple() {
 				g.handleSimple(packet.Simple, fromPeer)
-			}
-			if packet.IsRumor() {
+			} else if packet.IsRumor() {
 				g.handleRumor(packet.Rumor, fromPeer)
-			}
-			if packet.IsStatus() {
+			} else if packet.IsStatus() {
 				g.handleStatus(packet.Status, fromPeer)
-			}
-			if packet.IsPrivate() {
+			} else if packet.IsPrivate() {
 				g.handlePrivate(packet.Private)
 			}
 		}()
 	}
 }
 
-func (g *Gossiper) sendPacket(packet *packets_gossiper.GossipPacket, to ...*peers.Peer) {
+func (g *Gossiper) handleSimple(msg *packets_gossiper.SimpleMessage, fromPeer *peers.Peer) {
+	msgToSend := &packets_gossiper.SimpleMessage{
+		Contents:      msg.Contents,
+		RelayPeerAddr: g.GossipAddr.ToIpPort(),
+		OriginalName:  msg.OriginalName,
+	}
+	toPeers := g.PeersSet.Filter(fromPeer).GetSlice() // not resending to sender
 
-	if err := packet.Check(); err != nil {
+	go g.sendPacket(msgToSend, toPeers...)
+}
+
+func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
+
+	// saving message
+	g.VectorClock.GetOrCreateHandler(msg.Origin).Save(msg)
+	g.RoutingTable.GetOrCreateHandler(msg.Origin).AckRumor(msg, fromPeer)
+
+	msgToSend := &packets_gossiper.RumorMessage{
+		ID:     msg.ID,
+		Text:   msg.Text,
+		Origin: msg.Origin,
+	}
+
+	// sendPacket to a random peer
+	if randomPeer := g.PeersSet.GetRandom(fromPeer); randomPeer != nil {
+		go g.sendPacket(msgToSend, randomPeer)
+	}
+
+	// send back status packet to sender (= ack of the rumor)
+	go g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer)
+}
+
+func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer *peers.Peer) {
+	rumorMsg, remoteHasMsg := g.VectorClock.Compare(packet.ToMap())
+
+	if rumorMsg != nil { // has a msg to send
+		go g.sendPacket(rumorMsg, fromPeer) // send the new message
+	}
+	if remoteHasMsg { // remote has new message
+		go g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer) // send status to remote
+	}
+	if rumorMsg == nil && !remoteHasMsg { // is up to date
+		fromPeer.Timeout.Trigger()
+		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
+	} else {
+		fromPeer.Timeout.Cancel()
+	}
+}
+
+func (g *Gossiper) handlePrivate(msg *packets_gossiper.PrivateMessage) {
+	if msg.Destination != g.Origin {
+		msgToSend := msg.Hopped()
+		toPeer := g.RoutingTable.GetOrCreateHandler(msg.Destination).GetPeer()
+		if msgToSend.HopLimit > 0 && toPeer != nil {
+			go g.sendPacket(msgToSend, toPeer)
+		}
+	} else {
+		g.Conversations.GetOrCreateHandler(msg.Origin).Save(msg)
+	}
+}
+
+func (g *Gossiper) sendPacket(packet packets_gossiper.GossipPacketI, to ...*peers.Peer) {
+
+	packetToSend := packet.ToGossipPacket()
+	if err := packetToSend.Check(); err != nil {
 		common.HandleAbort(fmt.Sprintf("cannot sendPacket incorrect packet"), err)
 		return
 	}
@@ -343,17 +354,17 @@ func (g *Gossiper) sendPacket(packet *packets_gossiper.GossipPacket, to ...*peer
 	}
 }
 
-func (g *Gossiper) handleSendPacket(packet *packets_gossiper.GossipPacket, toPeer *peers.Peer) {
-
-	if packet.IsRumor() {
-		packet.Rumor.SendPrintMongering(toPeer)
+func (g *Gossiper) handleSendPacket(packet packets_gossiper.GossipPacketI, toPeer *peers.Peer) {
+	packetToSend := packet.ToGossipPacket()
+	if packetToSend.IsRumor() {
+		packetToSend.Rumor.SendPrintMongering(toPeer)
 
 		// start timeout to this peer if none is already active
 		toPeer.Timeout.SetIfNotActive(timeoutDuration, func() {
 			if flipped := utils.FlipCoin(); flipped {
 				if randomPeer := g.PeersSet.GetRandom(toPeer); randomPeer != nil {
 					go g.sendPacket(packet, randomPeer)
-					packet.Rumor.SendPrintFlipped(randomPeer)
+					packetToSend.Rumor.SendPrintFlipped(randomPeer)
 				}
 			}
 		})
