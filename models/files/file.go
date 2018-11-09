@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	sharedPath    = "./_SharedFiles/"
-	downloadsPath = "./_Downloads/"
-	chunkSize     = 8000
-	hashSize      = sha256.Size
+	rootPath      = "../"
+	sharedPath    = rootPath + "_SharedFiles/"
+	downloadsPath = rootPath + "_Downloads/"
+	ChunkSize     = 8192
+	HashSize      = sha256.Size
 )
 
 type fileType struct {
@@ -33,11 +34,11 @@ func NewFile(name string) *fileType {
 	}
 
 	fileSize := len(fileBytes)
-	nChunks := int(math.Ceil(float64(fileSize) / chunkSize))
+	nChunks := int(math.Ceil(float64(fileSize) / ChunkSize))
 	var metafile []byte
 	for i := 0; i < nChunks; i++ {
-		from := i * chunkSize
-		to := utils.Min((i+1)*chunkSize, fileSize)
+		from := i * ChunkSize
+		to := utils.Min((i+1)*ChunkSize, fileSize)
 		hash := sha256.Sum256(fileBytes[from:to])
 		metafile = append(metafile, hash[:]...)
 	}
@@ -49,20 +50,20 @@ func NewFile(name string) *fileType {
 	}
 }
 
-func (file *fileType) Hash() [hashSize]byte {
+func (file *fileType) Hash() [HashSize]byte {
 	return sha256.Sum256(file.Metafile)
 }
 
 func (file *fileType) NumChunks() int {
-	return len(file.Metafile) / hashSize
+	return len(file.Metafile) / HashSize
 }
 
 func (file *fileType) GetAllHashes() map[string]*fileType {
 	hashes := map[string]*fileType{}
 	nChunks := file.NumChunks()
 	for i := 0; i < nChunks; i++ {
-		fromMeta := i * hashSize
-		toMeta := (i + 1) * hashSize
+		fromMeta := i * HashSize
+		toMeta := (i + 1) * HashSize
 		hashes[utils.HashToHex(file.Metafile[fromMeta:toMeta])] = file
 	}
 	return hashes
@@ -71,11 +72,11 @@ func (file *fileType) GetAllHashes() map[string]*fileType {
 func (file *fileType) GetChunk(hash string) ([]byte, error) {
 	nChunks := file.NumChunks()
 	for i := 0; i < nChunks; i++ {
-		fromMeta := i * hashSize
-		toMeta := (i + 1) * hashSize
+		fromMeta := i * HashSize
+		toMeta := (i + 1) * HashSize
 		if utils.HashToHex(file.Metafile[fromMeta:toMeta]) == hash {
-			fromFile := i * chunkSize
-			toFile := utils.Min((i+1)*chunkSize, file.Size)
+			fromFile := i * ChunkSize
+			toFile := utils.Min((i+1)*ChunkSize, file.Size)
 			fileBytes, err := ioutil.ReadFile(nameToPath(file.name))
 			if err != nil {
 				return nil, err
