@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"encoding/hex"
 	"fmt"
+	"github.com/gregunz/Peerster/common"
 	"math/rand"
 )
 
@@ -17,5 +19,14 @@ func Min(a, b int) int {
 }
 
 func HashToHex(hash []byte) string {
-	return fmt.Sprintf("%x", hash)
+	return hex.EncodeToString(hash)
+}
+
+func HexToHash(hexHash string) []byte {
+	hash, err := hex.DecodeString(hexHash)
+	if err != nil {
+		common.HandleAbort(fmt.Sprint("could not decode hexadecimal string '%s'", hexHash), err)
+		return nil
+	}
+	return hash
 }
