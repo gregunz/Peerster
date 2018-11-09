@@ -11,23 +11,23 @@ import (
 )
 
 var uiPort uint
-var dest string
+var destination string
 var filename string
-var msg string
+var message string
 var request string
 
 func init() {
 	flag.UintVar(&uiPort, "UIPort", 8080, "port for the UI client")
-	flag.StringVar(&dest, "dest", "", "destination for the private message or file request")
+	flag.StringVar(&destination, "dest", "", "destination for the private message or file request")
 	flag.StringVar(&filename, "file", "", "filename to be indexed by the gossiper")
-	flag.StringVar(&msg, "msg", "", "message to be sent")
+	flag.StringVar(&message, "msg", "", "message to be sent")
 	flag.StringVar(&request, "request", "", "request metafile of this hash")
 }
 
 func main() {
 	flag.Parse()
 
-	packet := inputsToPacket(msg, dest, filename, request)
+	packet := inputsToPacket(message, destination, filename, request)
 	if packet == nil {
 		common.HandleAbort("combination of arguments are not meaningful, use -help flag for more details", nil)
 		return
