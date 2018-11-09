@@ -21,7 +21,7 @@ import (
 const (
 	timeoutDuration     = 1 * time.Second
 	antiEntropyDuration = 1 * time.Second
-	udpPacketSize       = 4096
+	udpPacketMaxSize    = 65536
 	hopLimit            = 10
 )
 
@@ -159,10 +159,13 @@ func (g *Gossiper) listenGossip(group *sync.WaitGroup) {
 func (g *Gossiper) listen(conn *net.UDPConn, group *sync.WaitGroup, callback func([]byte, string)) {
 	defer conn.Close()
 	defer group.Done()
-	wholeBuffer := make([]byte, udpPacketSize)
+	wholeBuffer := make([]byte, udpPacketMaxSize)
 	for {
 		n, udpAddr, err := conn.ReadFromUDP(wholeBuffer)
-		common.HandleError(err)
+		if err != nil {
+			common.HandleAbort("could not read UDP packet", err)
+			continue
+		}
 		buffer := make([]byte, n)
 		copy(buffer, wholeBuffer[:n])
 		go callback(buffer, udpAddr.String())
