@@ -11,7 +11,7 @@ type PrivateMessage struct {
 }
 
 func (msg *PrivateMessage) AckPrint(myOrigin string) {
-	if myOrigin == msg.Origin {
+	if myOrigin == msg.Destination {
 		fmt.Println(msg.String())
 	}
 }
