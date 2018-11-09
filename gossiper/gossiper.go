@@ -35,7 +35,7 @@ type Gossiper struct {
 	GossipAddr     *peers.Address
 	ClientAddr     *peers.Address
 	GUIPort        uint
-	FromClientChan chan *packets_client.PostMessagePacket
+	FromClientChan chan *packets_client.ClientPacket
 	FromGossipChan chan *GossipChannelElement
 	NodeChan       peers.NodeChan
 	RumorChan      vector_clock.RumorChan
@@ -81,7 +81,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		Origin:         name,
 		GossipAddr:     address,
 		GUIPort:        guiPort,
-		FromClientChan: make(chan *packets_client.PostMessagePacket),
+		FromClientChan: make(chan *packets_client.ClientPacket),
 		FromGossipChan: make(chan *GossipChannelElement),
 		NodeChan:       updatesChannels,
 		RumorChan:      updatesChannels,
@@ -125,13 +125,15 @@ func (g *Gossiper) Start(group *sync.WaitGroup) {
 
 func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 	g.listen(g.clientConn, group, func(buffer []byte, _ string) {
-		var packet packets_client.PostMessagePacket
+		var packet packets_client.ClientPacket
 		if err := protobuf.Decode(buffer, &packet); err != nil {
 			common.HandleAbort("could not decode client packet", err)
 			return
 		}
-		if packet.Message != "" {
-			g.FromClientChan <- &packet
+		if packet.IsPostMessage() {
+			if packet.PostMessage.Message != "" {
+				g.FromClientChan <- packet
+			}
 		}
 	})
 }

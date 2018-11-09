@@ -18,3 +18,9 @@ func (packet PostMessagePacket) String() string {
 	}
 	return fmt.Sprintf("POST MESSAGE %s%s\n", packet.Message, toStr)
 }
+
+func (packet *PostMessagePacket) ToClientPacket() *ClientPacket {
+	return &ClientPacket{
+		PostMessage: packet,
+	}
+}

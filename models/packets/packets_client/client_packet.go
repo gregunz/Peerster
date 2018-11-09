@@ -2,7 +2,6 @@ package packets_client
 
 import (
 	"fmt"
-	"github.com/gregunz/Peerster/common"
 	"strings"
 )
 
@@ -13,6 +12,8 @@ type ClientPacket struct {
 	SubscribeMessage *SubscribeMessagePacket `json:"subscribe-message"`
 	SubscribeNode    *SubscribeNodePacket    `json:"subscribe-node"`
 	SubscribeOrigin  *SubscribeOriginPacket  `json:"subscribe-origin"`
+	IndexFile        *IndexFilePacket        `json:"index-file"`
+	RequestFile      *RequestFilePacket      `json:"request-file"`
 }
 
 func (packet *ClientPacket) IsGetId() bool {
@@ -39,6 +40,14 @@ func (packet *ClientPacket) IsSubscribeOrigin() bool {
 	return packet.SubscribeOrigin != nil
 }
 
+func (packet *ClientPacket) IsIndexFile() bool {
+	return packet.IndexFile != nil
+}
+
+func (packet *ClientPacket) IsRequestFile() bool {
+	return packet.RequestFile != nil
+}
+
 func (packet *ClientPacket) AckPrint() {
 
 	if packet.IsGetId() {
@@ -58,6 +67,12 @@ func (packet *ClientPacket) AckPrint() {
 	}
 	if packet.IsSubscribeOrigin() {
 		packet.SubscribeOrigin.AckPrint()
+	}
+	if packet.IsRequestFile() {
+		packet.RequestFile.AckPrint()
+	}
+	if packet.IsIndexFile() {
+		packet.IndexFile.AckPrint()
 	}
 }
 
@@ -79,6 +94,12 @@ func (packet *ClientPacket) Check() error {
 		counter += 1
 	}
 	if packet.IsSubscribeOrigin() {
+		counter += 1
+	}
+	if packet.IsIndexFile() {
+		counter += 1
+	}
+	if packet.IsRequestFile() {
 		counter += 1
 	}
 	if counter == 1 {
@@ -107,8 +128,13 @@ func (packet ClientPacket) String() string {
 	if packet.IsSubscribeOrigin() {
 		ls = append(ls, packet.SubscribeOrigin.String())
 	}
+	if packet.IsIndexFile() {
+		ls = append(ls, packet.IndexFile.String())
+	}
+	if packet.IsRequestFile() {
+		ls = append(ls, packet.RequestFile.String())
+	}
 	if len(ls) == 0 {
-		common.HandleError(fmt.Errorf("empty client packet"))
 		return "<empty>"
 	}
 	return strings.Join(ls, " + ")
