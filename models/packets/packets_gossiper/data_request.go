@@ -1,6 +1,9 @@
 package packets_gossiper
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/gregunz/Peerster/utils"
+)
 
 type DataRequest struct {
 	Origin      string `json:"origin"`
@@ -11,7 +14,7 @@ type DataRequest struct {
 
 func (packet DataRequest) String() string {
 	return fmt.Sprintf("DATA REQUEST from %s hop-limit %d hash %s to %s",
-		packet.Origin, packet.HopLimit, string(packet.HashValue), packet.Destination)
+		packet.Origin, packet.HopLimit, utils.HashToHex(packet.HashValue), packet.Destination)
 }
 
 func (packet *DataRequest) AckPrint(myOrigin string) {

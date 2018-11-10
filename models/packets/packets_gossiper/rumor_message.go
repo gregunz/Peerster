@@ -32,5 +32,5 @@ func (msg *RumorMessage) ToGossipPacket() *GossipPacket {
 
 func (msg RumorMessage) String() string {
 	return fmt.Sprintf("RUMOR origin %s ID %d contents %s",
-		msg.Origin, msg.Origin, msg.Text)
+		msg.Origin, msg.ID, msg.Text)
 }

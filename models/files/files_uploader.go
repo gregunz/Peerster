@@ -29,11 +29,16 @@ func (uploader *uploader) IndexFile(filename string) {
 	defer uploader.mux.Unlock()
 
 	file := NewFile(filename)
+	if file == nil {
+		return
+	}
 	_, ok := uploader.chunksToFile[file.MetaHash]
 	if ok {
 		common.HandleAbort("file is already indexed", nil)
 		return
 	}
+	uploader.chunksToFile[file.MetaHash] = file
+	fmt.Printf("new file indexed with hash %s\n", file.MetaHash)
 	for _, hash := range file.Hashes {
 		if _, ok := uploader.chunksToFile[hash]; ok {
 			common.HandleError(fmt.Errorf("collision of hashes of some indexed files"))

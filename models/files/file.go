@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	rootPath      = "../"
+	rootPath      = "./"
 	sharedPath    = rootPath + "_SharedFiles/"
 	downloadsPath = rootPath + "_Downloads/"
 	ChunkSize     = 8192
@@ -33,6 +33,7 @@ func NewFile(name string) *fileType {
 	fileBytes, err := ioutil.ReadFile(nameToPath(name))
 	if err != nil {
 		common.HandleAbort(fmt.Sprintf("could not read %s", name), err)
+		return nil
 	}
 
 	fileSize := len(fileBytes)

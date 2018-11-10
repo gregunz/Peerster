@@ -24,10 +24,12 @@ const (
 	antiEntropyDuration = 1 * time.Second
 	udpPacketMaxSize    = 65536
 	hopLimit            = 10
+	debug               = false
 )
 
 type Gossiper struct {
 	mode           *Mode
+	debug          bool
 	clientConn     *net.UDPConn
 	gossiperConn   *net.UDPConn
 	rTimerDuration time.Duration
@@ -78,6 +80,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 
 	return &Gossiper{
 		mode:           mode,
+		debug:          debug,
 		ClientAddr:     clientAddr,
 		clientConn:     clientConn,
 		gossiperConn:   peerConn,
@@ -137,11 +140,10 @@ func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 			common.HandleAbort("could not decode client packet", err)
 			return
 		}
-		if packet.IsPostMessage() {
-			if packet.PostMessage.Message != "" {
-				g.FromClientChan <- &packet
-			}
+		if g.debug {
+			fmt.Printf("<< receiving from client: %s\n", packet.String())
 		}
+		g.FromClientChan <- &packet
 	})
 }
 
@@ -155,6 +157,9 @@ func (g *Gossiper) listenGossip(group *sync.WaitGroup) {
 		if err := packet.Check(); err != nil {
 			common.HandleAbort(fmt.Sprintf("received incorrect packet from <%s>", fromIpPort), err)
 			return
+		}
+		if g.debug {
+			fmt.Printf("<< receiving from gossiper: %s\n", packet.String())
 		}
 		g.FromGossipChan <- &GossipChannelElement{
 			Packet: &packet,
@@ -211,7 +216,9 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 		packet := <-g.FromClientChan
 
 		go func() {
-			packet.AckPrint()
+			if !g.debug {
+				packet.AckPrint()
+			}
 			if g.mode.isSimple() && packet.IsPostMessage() { // SIMPLE MODE
 				g.handleClientSimpleMode(packet)
 			} else { // NORMAL MODE
@@ -247,12 +254,12 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 			Origin:      g.Origin,
 			Destination: request.Destination,
 			HopLimit:    hopLimit,
-			HashValue:   utils.HexToHash(request.HashValue),
+			HashValue:   utils.HexToHash(request.Request),
 		}
-		g.FilesDownloader.AddNewFile(request.FileName, request.HashValue)
+		g.FilesDownloader.AddNewFile(request.FileName, request.Request)
 		g.transmit(packet, false)
 	} else if packet.IsIndexFile() {
-
+		g.FilesUploader.IndexFile(packet.IndexFile.File)
 	}
 }
 
@@ -263,8 +270,10 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 		packet, fromPeer := elem.Packet, elem.From
 
 		go func() {
-			packet.AckPrint(fromPeer, g.Origin)
-			g.PeersSet.AckPrint()
+			if !g.debug {
+				packet.AckPrint(fromPeer, g.Origin)
+				g.PeersSet.AckPrint()
+			}
 
 			if packet.IsSimple() {
 				g.handleSimple(packet.Simple, fromPeer)
@@ -326,7 +335,9 @@ func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer 
 	}
 	if rumorMsg == nil && !remoteHasMsg { // is up to date
 		fromPeer.FlipTimeout.Trigger()
-		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
+		if !g.debug {
+			fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
+		}
 	} else {
 		fromPeer.FlipTimeout.Cancel()
 	}
@@ -399,7 +410,7 @@ func (g *Gossiper) sendPacket(packet packets_gossiper.GossipPacketI, to ...*peer
 		common.HandleAbort(fmt.Sprintf("cannot sendPacket to zero peers"), nil)
 		return
 	}
-	packetBytes, err := protobuf.Encode(packet)
+	packetBytes, err := protobuf.Encode(packet.ToGossipPacket())
 	if err != nil {
 		common.HandleAbort(fmt.Sprintf("error during packet encoding"), err)
 		return
@@ -409,6 +420,9 @@ func (g *Gossiper) sendPacket(packet packets_gossiper.GossipPacketI, to ...*peer
 		go func(p *peers.Peer) {
 			if p != nil && !p.Addr.Equals(g.GossipAddr) {
 				g.handleSendPacket(packet, p)
+				if g.debug {
+					fmt.Printf(">> sending %s\n", packet.ToGossipPacket().String())
+				}
 				g.gossiperConn.WriteToUDP(packetBytes, p.Addr.UDP())
 			} else {
 				//common.HandleAbort(fmt.Sprintf("trying to send to peer <%s>", p), nil)

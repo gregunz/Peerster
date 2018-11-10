@@ -220,6 +220,22 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 
+	if packet.IsIndexFile() {
+		go func() { server.gossiper.FromClientChan <- packet.IndexFile.ToClientPacket() }()
+		if isRest {
+			common.HandleError(w.WriteJSON(nil))
+		}
+		return
+	}
+
+	if packet.IsRequestFile() {
+		go func() { server.gossiper.FromClientChan <- packet.RequestFile.ToClientPacket() }()
+		if isRest {
+			common.HandleError(w.WriteJSON(nil))
+		}
+		return
+	}
+
 	common.HandleAbort("an unexpected event occurred while handling ClientPacket", nil)
 }
 

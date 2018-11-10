@@ -6,7 +6,6 @@ type RequestFilePacket struct {
 	Destination string `json:"destination"`
 	FileName    string `json:"filename"`
 	Request     string `json:"request"`
-	HashValue   string `json:"hash-value"`
 }
 
 func (packet RequestFilePacket) String() string {
