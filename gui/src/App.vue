@@ -14,14 +14,28 @@
         <chat v-else :dest="selectedDest" :my-origin="myOrigin" :chat-messages="selectedDestChat" :send-msg="sendPrivate"></chat>
       </div>
       <div class="col s4">
+        <contacts :origins-and-badges="originsAndBadges" :on-contact-click="onContactClick"></contacts>
         <div class="back-button" v-if="selectedDest !== ''">
           <button class="waves-effect waves-light btn" @click="backToRumors()">
             <i class="material-icons right"></i>
             Back to Rumors
           </button>
         </div>
-        <contacts :origins-and-badges="originsAndBadges" :on-contact-click="onContactClick"></contacts>
-        <node :nodes="nodes" :send-node="sendNode"></node>
+        <list-with-input
+          :list="nodes"
+          :elem-to-string="nodeToString"
+          :button-action="sendNode"
+          title="Nodes"
+          button-text="Add"
+          button-icon="router">
+        </list-with-input>
+        <list-with-input
+          :list="files"
+          :button-action="indexFile"
+          title="Files"
+          button-text="Index"
+          button-icon="create_new_folder">
+        </list-with-input>
       </div>
     </div>
 
@@ -31,7 +45,7 @@
 
 <script>
 import Chat from "./components/Chat";
-import Node from "./components/Node"
+import ListWithInput from "./components/ListWithInput"
 import Contacts from "./components/Contacts";
 import Chip from "./components/Chip";
 import swal from "sweetalert2"
@@ -39,7 +53,7 @@ import swal from "sweetalert2"
 
 export default {
   name: 'app',
-  components: {Chip, Contacts, Chat, Node},
+  components: {Chip, Contacts, Chat, ListWithInput},
   data () {
     return {
       apiURL: '',
@@ -49,6 +63,7 @@ export default {
       selectedDest: '',
       selectedDestChat: [],
       nodes: [],
+      files: ["file", "file2"],
       originsAndBadges: [],
       myOrigin: '',
       privateMsgBuffer: [],
@@ -157,6 +172,10 @@ export default {
       this.selectedDestChat = null;
     },
 
+    nodeToString: function (node) {
+      return node.address;
+    },
+
     sendNode: function (nodeText) {
       const nodePacket = {
         'post-node': {
@@ -235,8 +254,12 @@ export default {
         origin: origin,
         numUnread: 0,
       }
-    }
-  }
+    },
+
+    indexFile: function (file) {
+      console.log(file)
+    },
+  },
 }
 </script>
 
@@ -277,6 +300,6 @@ main {
   flex: 1 0 auto;
 }
 .back-button {
-  margin-top: 50px;
+  /*margin-top: 50px;*/
 }
 </style>
