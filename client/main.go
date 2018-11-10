@@ -55,7 +55,7 @@ func inputsToPacket(msg, dest, filename, request string) packets_client.ClientPa
 	} else if msg == "" && dest != "" && filename != "" && request != "" { // requesting a file
 		packet = &packets_client.RequestFilePacket{
 			Destination: dest,
-			File:        filename,
+			FileName:    filename,
 			Request:     request,
 		}
 	} else if msg == "" && filename != "" && dest == "" && request == "" {

@@ -6,12 +6,14 @@ import (
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/utils"
 	"io/ioutil"
+	"sync"
 )
 
 type fileBuilder struct {
 	name         string
-	hashList     []string // necessary for ordering of chunks
+	hashList     []string
 	hashToChunks map[string][]byte
+	mux          sync.Mutex
 }
 
 func NewFileBuilder(name string, metafile []byte) *fileBuilder {
@@ -33,6 +35,9 @@ func NewFileBuilder(name string, metafile []byte) *fileBuilder {
 }
 
 func (file *fileBuilder) IsComplete() bool {
+	file.mux.Lock()
+	defer file.mux.Unlock()
+
 	for _, f := range file.hashToChunks {
 		if f == nil {
 			return false
@@ -42,6 +47,9 @@ func (file *fileBuilder) IsComplete() bool {
 }
 
 func (file *fileBuilder) HashOfMissingChunks() [][]byte {
+	file.mux.Lock()
+	defer file.mux.Unlock()
+
 	missingChunks := [][]byte{}
 	for h, f := range file.hashToChunks {
 		if f == nil {
@@ -51,17 +59,28 @@ func (file *fileBuilder) HashOfMissingChunks() [][]byte {
 	return missingChunks
 }
 
-func (file *fileBuilder) AddChunks(chunks ...[]byte) {
+func (file *fileBuilder) AddChunks(chunks ...[]byte) bool {
+	file.mux.Lock()
+	defer file.mux.Unlock()
+
+	atLeastOneAdded := false
+
 	for _, chunk := range chunks {
 		hash := sha256.Sum256(chunk)
 		hashString := utils.HashToHex(hash[:])
 		if _, ok := file.hashToChunks[hashString]; ok {
 			file.hashToChunks[hashString] = chunk
+			atLeastOneAdded = true
 		}
 	}
+
+	return atLeastOneAdded
 }
 
 func (file *fileBuilder) Build() bool {
+	file.mux.Lock()
+	defer file.mux.Unlock()
+
 	fileBytes := []byte{}
 	for _, hash := range file.hashList {
 		chunk := file.hashToChunks[hash]

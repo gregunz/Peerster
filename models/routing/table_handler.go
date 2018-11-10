@@ -2,6 +2,7 @@ package routing
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 	"sync"
@@ -37,5 +38,8 @@ func (handler *tableHandler) GetPeer() *peers.Peer {
 	handler.mux.Lock()
 	defer handler.mux.Unlock()
 
+	if handler.peer == nil {
+		common.HandleError(fmt.Errorf("no peer for this destination: %s", handler.origin))
+	}
 	return handler.peer
 }

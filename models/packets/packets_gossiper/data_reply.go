@@ -20,3 +20,22 @@ func (packet *DataReply) AckPrint(myOrigin string) {
 		fmt.Println(packet.String())
 	}
 }
+
+func (packet *DataReply) ToGossipPacket() *GossipPacket {
+	return &GossipPacket{
+		DataReply: packet,
+	}
+}
+
+func (msg DataReply) Hopped() Transmittable {
+	msg.HopLimit -= 1
+	return &msg
+}
+
+func (msg *DataReply) Dest() string {
+	return msg.Destination
+}
+
+func (msg *DataReply) IsTransmittable() bool {
+	return msg.HopLimit > 0
+}

@@ -6,15 +6,15 @@ import (
 )
 
 type Peer struct {
-	Addr    *Address
-	Timeout *timeouts.Timeout
-	mux     sync.Mutex
+	Addr        *Address
+	FlipTimeout *timeouts.Timeout
+	mux         sync.Mutex
 }
 
 func NewPeer(s string) *Peer {
 	p := &Peer{
-		Addr:    NewAddress(s),
-		Timeout: timeouts.NewTimeout(),
+		Addr:        NewAddress(s),
+		FlipTimeout: timeouts.NewTimeout(),
 	}
 	if p.Addr.IsEmpty() {
 		return nil

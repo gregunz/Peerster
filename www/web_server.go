@@ -154,7 +154,7 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 	if packet.IsPostMessage() {
-		go func() { server.gossiper.FromClientChan <- packet.PostMessage }()
+		go func() { server.gossiper.FromClientChan <- packet.PostMessage.ToClientPacket() }()
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
 		}

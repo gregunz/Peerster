@@ -5,6 +5,7 @@ import (
 	"github.com/dedis/protobuf"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/models/conv"
+	"github.com/gregunz/Peerster/models/files"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
@@ -31,20 +32,22 @@ type Gossiper struct {
 	gossiperConn   *net.UDPConn
 	rTimerDuration time.Duration
 
-	Origin         string
-	GossipAddr     *peers.Address
-	ClientAddr     *peers.Address
-	GUIPort        uint
-	FromClientChan chan *packets_client.ClientPacket
-	FromGossipChan chan *GossipChannelElement
-	NodeChan       peers.NodeChan
-	RumorChan      vector_clock.RumorChan
-	OriginChan     routing.OriginChan
-	PrivateMsgChan conv.PrivateMsgChan
-	PeersSet       *peers.Set
-	VectorClock    *vector_clock.VectorClock
-	RoutingTable   *routing.Table
-	Conversations  *conv.Conversations
+	Origin          string
+	GossipAddr      *peers.Address
+	ClientAddr      *peers.Address
+	GUIPort         uint
+	FromClientChan  chan *packets_client.ClientPacket
+	FromGossipChan  chan *GossipChannelElement
+	NodeChan        peers.NodeChan
+	RumorChan       vector_clock.RumorChan
+	OriginChan      routing.OriginChan
+	PrivateMsgChan  conv.PrivateMsgChan
+	PeersSet        *peers.Set
+	VectorClock     vector_clock.VectorClock
+	RoutingTable    routing.Table
+	Conversations   conv.Conversation
+	FilesUploader   files.Uploader
+	FilesDownloader files.Downloader
 
 	mux sync.Mutex
 }
@@ -69,6 +72,8 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 	routingTable := routing.NewTable(name, updatesChannels)
 	vectorClock := vector_clock.NewVectorClock(updatesChannels)
 	conversations := conv.NewConversations(updatesChannels)
+	uploader := files.NewFilesUploader()
+	downloader := files.NewFilesDownloader()
 	peersSet.SetNodeChan(updatesChannels)
 
 	return &Gossiper{
@@ -78,19 +83,21 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		gossiperConn:   peerConn,
 		rTimerDuration: time.Duration(rTimerDuration) * time.Second,
 
-		Origin:         name,
-		GossipAddr:     address,
-		GUIPort:        guiPort,
-		FromClientChan: make(chan *packets_client.ClientPacket),
-		FromGossipChan: make(chan *GossipChannelElement),
-		NodeChan:       updatesChannels,
-		RumorChan:      updatesChannels,
-		PrivateMsgChan: updatesChannels,
-		OriginChan:     updatesChannels,
-		PeersSet:       peersSet,
-		VectorClock:    vectorClock,
-		RoutingTable:   routingTable,
-		Conversations:  conversations,
+		Origin:          name,
+		GossipAddr:      address,
+		GUIPort:         guiPort,
+		FromClientChan:  make(chan *packets_client.ClientPacket),
+		FromGossipChan:  make(chan *GossipChannelElement),
+		NodeChan:        updatesChannels,
+		RumorChan:       updatesChannels,
+		PrivateMsgChan:  updatesChannels,
+		OriginChan:      updatesChannels,
+		PeersSet:        peersSet,
+		VectorClock:     vectorClock,
+		RoutingTable:    routingTable,
+		Conversations:   conversations,
+		FilesUploader:   uploader,
+		FilesDownloader: downloader,
 	}
 }
 
@@ -233,12 +240,17 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 	} else if packet.IsPostMessage() && packet.PostMessage.Destination != "" {
 		meHandler := g.Conversations.GetOrCreateHandler(g.Origin)
 		msg := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message, packet.PostMessage.Destination, hopLimit)
-		toPeer := g.RoutingTable.GetOrCreateHandler(msg.Destination).GetPeer()
-		if msg.Destination != g.Origin && toPeer != nil {
-			go g.sendPacket(msg, toPeer)
-		}
+		g.transmit(msg, false)
 	} else if packet.IsRequestFile() {
-
+		request := packet.RequestFile
+		packet := &packets_gossiper.DataRequest{
+			Origin:      g.Origin,
+			Destination: request.Destination,
+			HopLimit:    hopLimit,
+			HashValue:   utils.HexToHash(request.HashValue),
+		}
+		g.FilesDownloader.AddNewFile(request.FileName, request.HashValue)
+		g.transmit(packet, false)
 	} else if packet.IsIndexFile() {
 
 	}
@@ -262,6 +274,10 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 				g.handleStatus(packet.Status, fromPeer)
 			} else if packet.IsPrivate() {
 				g.handlePrivate(packet.Private)
+			} else if packet.IsDataRequest() {
+				g.handleDataRequest(packet.DataRequest)
+			} else if packet.IsDataReply() {
+				g.handleDataReply(packet.DataReply)
 			}
 		}()
 	}
@@ -309,23 +325,67 @@ func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer 
 		go g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer) // send status to remote
 	}
 	if rumorMsg == nil && !remoteHasMsg { // is up to date
-		fromPeer.Timeout.Trigger()
+		fromPeer.FlipTimeout.Trigger()
 		fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
 	} else {
-		fromPeer.Timeout.Cancel()
+		fromPeer.FlipTimeout.Cancel()
+	}
+}
+
+func (g *Gossiper) transmit(packetToTransmit packets_gossiper.Transmittable, decreaseHop bool) {
+	if decreaseHop {
+		packetToTransmit = packetToTransmit.Hopped()
+	}
+	if packetToTransmit.IsTransmittable() && packetToTransmit.Dest() != g.Origin {
+		toPeer := g.RoutingTable.GetOrCreateHandler(packetToTransmit.Dest()).GetPeer()
+		if toPeer != nil {
+			go g.sendPacket(packetToTransmit, toPeer)
+		}
 	}
 }
 
 func (g *Gossiper) handlePrivate(msg *packets_gossiper.PrivateMessage) {
 	if msg.Destination != g.Origin {
-		msgToSend := msg.Hopped()
-		toPeer := g.RoutingTable.GetOrCreateHandler(msg.Destination).GetPeer()
-		if msgToSend.HopLimit > 0 && toPeer != nil {
-			go g.sendPacket(msgToSend, toPeer)
-		}
-	} else {
+		g.transmit(msg, true)
+	} else { // message is for us
 		g.Conversations.GetOrCreateHandler(msg.Origin).Save(msg)
 	}
+}
+
+func (g *Gossiper) handleDataRequest(packet *packets_gossiper.DataRequest) {
+	if packet.Destination != g.Origin {
+		g.transmit(packet, true)
+	} else { // packet is for us
+		if g.FilesUploader.HasChunk(packet.HashValue) {
+			data := g.FilesUploader.GetData(packet.HashValue)
+			reply := &packets_gossiper.DataReply{
+				Origin:      g.Origin,
+				Destination: packet.Origin,
+				HopLimit:    hopLimit,
+				HashValue:   packet.HashValue,
+				Data:        data,
+			}
+			g.transmit(reply, false)
+		}
+	}
+}
+
+func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
+	if packet.Destination != g.Origin {
+		g.transmit(packet, true)
+	} else { // packet is for us
+		awaitingHashes := g.FilesDownloader.AddChunkOrMetafile(utils.HashToHex(packet.HashValue), packet.Data)
+		for _, hashString := range awaitingHashes {
+			packetToSend := &packets_gossiper.DataRequest{
+				Origin:      g.Origin,
+				Destination: packet.Origin,
+				HopLimit:    hopLimit,
+				HashValue:   utils.HexToHash(hashString),
+			}
+			g.transmit(packetToSend, false)
+		}
+	}
+
 }
 
 func (g *Gossiper) sendPacket(packet packets_gossiper.GossipPacketI, to ...*peers.Peer) {
@@ -363,13 +423,18 @@ func (g *Gossiper) handleSendPacket(packet packets_gossiper.GossipPacketI, toPee
 		packetToSend.Rumor.SendPrintMongering(toPeer)
 
 		// start timeout to this peer if none is already active
-		toPeer.Timeout.SetIfNotActive(timeoutDuration, func() {
+		toPeer.FlipTimeout.SetIfNotActive(timeoutDuration, func() {
 			if flipped := utils.FlipCoin(); flipped {
 				if randomPeer := g.PeersSet.GetRandom(toPeer); randomPeer != nil {
 					go g.sendPacket(packet, randomPeer)
 					packetToSend.Rumor.SendPrintFlipped(randomPeer)
 				}
 			}
+		})
+	} else if packetToSend.IsDataRequest() {
+		hashString := utils.HashToHex(packetToSend.DataRequest.HashValue)
+		g.FilesDownloader.SetTimeout(hashString, func() {
+			g.transmit(packetToSend.DataRequest, false)
 		})
 	}
 

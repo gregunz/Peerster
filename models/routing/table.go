@@ -4,22 +4,27 @@ import (
 	"sync"
 )
 
-type Table struct {
+type table struct {
 	myOrigin   string
 	handlers   map[string]*tableHandler
 	originChan OriginChan
 	mux        sync.Mutex
 }
 
-func NewTable(myOrigin string, originChan OriginChan) *Table {
-	return &Table{
+type Table interface {
+	GetOrCreateHandler(origin string) *tableHandler
+	GetOrigins() []string
+}
+
+func NewTable(myOrigin string, originChan OriginChan) *table {
+	return &table{
 		myOrigin:   myOrigin,
 		handlers:   map[string]*tableHandler{},
 		originChan: originChan,
 	}
 }
 
-func (table *Table) getOrCreateHandler(origin string) *tableHandler {
+func (table *table) getOrCreateHandler(origin string) *tableHandler {
 	h, ok := table.handlers[origin]
 	if !ok {
 		h = newRoutingTableHandler(origin)
@@ -31,14 +36,14 @@ func (table *Table) getOrCreateHandler(origin string) *tableHandler {
 	return h
 }
 
-func (table *Table) GetOrCreateHandler(origin string) *tableHandler {
+func (table *table) GetOrCreateHandler(origin string) *tableHandler {
 	table.mux.Lock()
 	defer table.mux.Unlock()
 
 	return table.getOrCreateHandler(origin)
 }
 
-func (table *Table) GetOrigins() []string {
+func (table *table) GetOrigins() []string {
 	table.mux.Lock()
 	defer table.mux.Unlock()
 
