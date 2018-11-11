@@ -8,19 +8,24 @@ import (
 )
 
 type uploader struct {
-	chunksToFile map[string]*fileType
-	mux          sync.Mutex
+	filenameToFile map[string]*fileType
+	chunksToFile   map[string]*fileType
+	FileChan       FileChan
+	mux            sync.Mutex
 }
 
 type Uploader interface {
 	IndexFile(filename string)
 	HasChunk(chunkHash []byte) bool
 	GetData(chunkHash []byte) []byte
+	GetFilenames() []string
 }
 
 func NewFilesUploader() *uploader {
 	return &uploader{
-		chunksToFile: map[string]*fileType{},
+		filenameToFile: map[string]*fileType{},
+		chunksToFile:   map[string]*fileType{},
+		FileChan:       NewFileChan(true),
 	}
 }
 
@@ -38,6 +43,8 @@ func (uploader *uploader) IndexFile(filename string) {
 		return
 	}
 	uploader.chunksToFile[file.MetaHash] = file
+	uploader.filenameToFile[filename] = file
+	uploader.FileChan.Push(filename)
 	fmt.Printf("new file indexed with hash %s\n", file.MetaHash)
 	for _, hash := range file.Hashes {
 		if _, ok := uploader.chunksToFile[hash]; ok {
@@ -45,6 +52,17 @@ func (uploader *uploader) IndexFile(filename string) {
 		}
 		uploader.chunksToFile[hash] = file
 	}
+}
+
+func (uploader *uploader) GetFilenames() []string {
+	uploader.mux.Lock()
+	defer uploader.mux.Unlock()
+
+	var filenames []string
+	for filename := range uploader.filenameToFile {
+		filenames = append(filenames, filename)
+	}
+	return filenames
 }
 
 func (uploader *uploader) HasChunk(chunkHash []byte) bool {

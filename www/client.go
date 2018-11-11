@@ -4,6 +4,7 @@ type client struct {
 	IsSubscribedToMessage bool
 	IsSubscribedToNode    bool
 	IsSubscribedToOrigin  bool
+	IsSubscribedToFiles   bool
 }
 
 func NewClient() *client {
@@ -11,5 +12,6 @@ func NewClient() *client {
 		IsSubscribedToMessage: false,
 		IsSubscribedToNode:    false,
 		IsSubscribedToOrigin:  false,
+		IsSubscribedToFiles:   false,
 	}
 }

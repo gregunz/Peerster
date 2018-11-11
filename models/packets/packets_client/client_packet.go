@@ -14,6 +14,7 @@ type ClientPacket struct {
 	SubscribeOrigin  *SubscribeOriginPacket  `json:"subscribe-origin"`
 	IndexFile        *IndexFilePacket        `json:"index-file"`
 	RequestFile      *RequestFilePacket      `json:"request-file"`
+	SubscribeFile    *SubscribeFilePacket    `json:"subscribe-file"`
 }
 
 func (packet *ClientPacket) IsGetId() bool {
@@ -48,6 +49,10 @@ func (packet *ClientPacket) IsRequestFile() bool {
 	return packet.RequestFile != nil
 }
 
+func (packet *ClientPacket) IsSubscribeFile() bool {
+	return packet.SubscribeFile != nil
+}
+
 func (packet *ClientPacket) AckPrint() {
 
 	if packet.IsGetId() {
@@ -73,6 +78,9 @@ func (packet *ClientPacket) AckPrint() {
 	}
 	if packet.IsIndexFile() {
 		packet.IndexFile.AckPrint()
+	}
+	if packet.IsSubscribeFile() {
+		packet.SubscribeFile.AckPrint()
 	}
 }
 
@@ -100,6 +108,9 @@ func (packet *ClientPacket) Check() error {
 		counter += 1
 	}
 	if packet.IsRequestFile() {
+		counter += 1
+	}
+	if packet.IsSubscribeFile() {
 		counter += 1
 	}
 	if counter == 1 {
@@ -133,6 +144,9 @@ func (packet ClientPacket) String() string {
 	}
 	if packet.IsRequestFile() {
 		ls = append(ls, packet.RequestFile.String())
+	}
+	if packet.IsSubscribeFile() {
+		ls = append(ls, packet.SubscribeFile.String())
 	}
 	if len(ls) == 0 {
 		return "<empty>"

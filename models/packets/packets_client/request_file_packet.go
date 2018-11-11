@@ -4,12 +4,12 @@ import "fmt"
 
 type RequestFilePacket struct {
 	Destination string `json:"destination"`
-	FileName    string `json:"filename"`
+	Filename    string `json:"filename"`
 	Request     string `json:"request"`
 }
 
 func (packet RequestFilePacket) String() string {
-	return fmt.Sprintf("REQUEST FILE %s of %s with hash %s", packet.FileName, packet.Destination, packet.Request)
+	return fmt.Sprintf("REQUEST FILE %s of %s with hash %s", packet.Filename, packet.Destination, packet.Request)
 }
 
 func (packet *RequestFilePacket) AckPrint() {

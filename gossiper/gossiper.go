@@ -49,6 +49,7 @@ type Gossiper struct {
 	RoutingTable    routing.Table
 	Conversations   conv.Conversation
 	FilesUploader   files.Uploader
+	FilesChan       files.FileChan
 	FilesDownloader files.Downloader
 
 	mux sync.Mutex
@@ -100,6 +101,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		RoutingTable:    routingTable,
 		Conversations:   conversations,
 		FilesUploader:   uploader,
+		FilesChan:       uploader.FileChan,
 		FilesDownloader: downloader,
 	}
 }
@@ -256,10 +258,10 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 			HopLimit:    hopLimit,
 			HashValue:   utils.HexToHash(request.Request),
 		}
-		g.FilesDownloader.AddNewFile(request.FileName, request.Request)
+		g.FilesDownloader.AddNewFile(request.Filename, request.Request)
 		g.transmit(packet, false)
 	} else if packet.IsIndexFile() {
-		g.FilesUploader.IndexFile(packet.IndexFile.File)
+		g.FilesUploader.IndexFile(packet.IndexFile.Filename)
 	}
 }
 

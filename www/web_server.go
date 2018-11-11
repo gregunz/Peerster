@@ -67,6 +67,7 @@ func (server *WebServer) Start() {
 	go server.handlePrivateSubscriptions()
 	go server.handleNodeSubscriptions()
 	go server.handleOriginsSubscriptions()
+	go server.handleFilesSubscriptions()
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
@@ -137,6 +138,19 @@ func (server *WebServer) handleOriginsSubscriptions() {
 			for w, c := range server.clients {
 				if c.IsSubscribedToOrigin {
 					common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
+				}
+			}
+		}
+	}
+}
+
+func (server *WebServer) handleFilesSubscriptions() {
+	for {
+		filename := server.gossiper.FilesChan.Get()
+		if filename != "" {
+			for w, c := range server.clients {
+				if c.IsSubscribedToFiles {
+					common.HandleError(w.WriteJSON(responses_client.NewFileResponse(filename, server.policy)))
 				}
 			}
 		}
@@ -232,6 +246,20 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		go func() { server.gossiper.FromClientChan <- packet.RequestFile.ToClientPacket() }()
 		if isRest {
 			common.HandleError(w.WriteJSON(nil))
+		}
+		return
+	}
+
+	if packet.IsSubscribeFile() {
+		if !client.IsSubscribedToFiles && packet.SubscribeFile.Subscribe {
+			client.IsSubscribedToFiles = true
+			if packet.SubscribeFile.WithPrevious {
+				for _, filename := range server.gossiper.FilesUploader.GetFilenames() {
+					common.HandleError(w.WriteJSON(responses_client.NewFileResponse(filename, server.policy)))
+				}
+			}
+		} else if client.IsSubscribedToFiles && !packet.SubscribeFile.Subscribe {
+			client.IsSubscribedToFiles = false
 		}
 		return
 	}

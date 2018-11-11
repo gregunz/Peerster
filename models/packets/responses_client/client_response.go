@@ -1,6 +1,7 @@
 package responses_client
 
 import (
+	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 	"github.com/microcosm-cc/bluemonday"
@@ -12,6 +13,7 @@ type ClientResponse struct {
 	Rumor   *packets_gossiper.RumorMessage   `json:"rumor"`
 	Private *packets_gossiper.PrivateMessage `json:"private"`
 	Contact *ContactResponse                 `json:"contact"`
+	File    *packets_client.IndexFilePacket  `json:"file"`
 }
 
 func NewGetIdResponse(id string, policy *bluemonday.Policy) *ClientResponse {
@@ -43,5 +45,11 @@ func NewPrivateResponse(msg *packets_gossiper.PrivateMessage, policy *bluemonday
 func NewContactResponse(origin string, policy *bluemonday.Policy) *ClientResponse {
 	return &ClientResponse{
 		Contact: &ContactResponse{Origin: policy.Sanitize(origin)},
+	}
+}
+
+func NewFileResponse(filename string, policy *bluemonday.Policy) *ClientResponse {
+	return &ClientResponse{
+		File: &packets_client.IndexFilePacket{Filename: policy.Sanitize(filename)},
 	}
 }

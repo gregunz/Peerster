@@ -10,6 +10,7 @@ type UpdateChannels struct {
 	node       chan *peers.Peer
 	privateMsg chan *packets_gossiper.PrivateMessage
 	origin     chan string
+	file       chan string
 	activated  bool
 }
 
@@ -19,6 +20,7 @@ func NewChannels() *UpdateChannels {
 		node:       make(chan *peers.Peer),
 		privateMsg: make(chan *packets_gossiper.PrivateMessage),
 		origin:     make(chan string),
+		file:       make(chan string),
 		activated:  true,
 	}
 }

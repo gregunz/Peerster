@@ -3,11 +3,11 @@ package packets_client
 import "fmt"
 
 type IndexFilePacket struct {
-	File string `json:"file"`
+	Filename string `json:"filename"`
 }
 
 func (packet IndexFilePacket) String() string {
-	return fmt.Sprintf("INDEX FILE %s", packet.File)
+	return fmt.Sprintf("INDEX FILE %s", packet.Filename)
 }
 
 func (packet *IndexFilePacket) AckPrint() {
