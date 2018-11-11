@@ -74,5 +74,7 @@ func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet packets_clie
 		return
 	}
 	_, err2 := udpConn.WriteToUDP(packetBytes, udpAddr)
-	common.HandleAbort("error when sending packet", err2)
+	if err2 != nil {
+		common.HandleAbort("error when sending packet", err2)
+	}
 }
