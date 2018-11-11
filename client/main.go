@@ -69,6 +69,10 @@ func inputsToPacket(msg, dest, filename, request string) packets_client.ClientPa
 
 func sendMessage(udpAddr *net.UDPAddr, udpConn *net.UDPConn, packet packets_client.ClientPacketI) {
 	packetBytes, err := protobuf.Encode(packet.ToClientPacket())
-	common.HandleError(err)
-	udpConn.WriteToUDP(packetBytes, udpAddr)
+	if err != nil {
+		common.HandleError(err)
+		return
+	}
+	_, err2 := udpConn.WriteToUDP(packetBytes, udpAddr)
+	common.HandleAbort("error when sending packet", err2)
 }
