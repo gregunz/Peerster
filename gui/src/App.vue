@@ -3,6 +3,9 @@
     <header>
       <nav>
         <div class="nav-wrapper">
+          <div class="app-title brand-logo left">
+            <a href="/"><img id="logo" src="./static/logo_100x100_white.png"/> Peerster App</a>
+          </div>
           <a v-if="myOrigin !== ''" href="/" class="brand-logo right">connected as <chip :name="myOrigin"></chip></a>
         </div>
       </nav>
@@ -32,7 +35,7 @@
         <list-with-input
           :list="files"
           :button-action="indexFile"
-          title="Files"
+          title="Indexed Files"
           button-text="Index"
           button-icon="create_new_folder">
         </list-with-input>
@@ -49,7 +52,7 @@ import ListWithInput from "./components/ListWithInput"
 import Contacts from "./components/Contacts";
 import Chip from "./components/Chip";
 import swal from "sweetalert2"
-
+import axios from "axios";
 
 export default {
   name: 'app',
@@ -63,74 +66,90 @@ export default {
       selectedDest: '',
       selectedDestChat: [],
       nodes: [],
-      files: ["file", "file2"],
+      files: [],
       originsAndBadges: [],
       myOrigin: '',
-      privateMsgBuffer: [],
     }
   },
 
   created: function() {
     const self = this;
     this.apiURL = window.location.host;
-    this.ws = new WebSocket('ws://' + this.apiURL + '/ws');
-    this.ws.addEventListener('open', function () {
-      self.ws.send(JSON.stringify({'get-id' : {}})); // getting name
-      self.ws.send(JSON.stringify({'subscribe-message' : {'subscribe': true, 'with-previous': true}})); // subscribing to messages
-      self.ws.send(JSON.stringify({'subscribe-node' : {'subscribe': true, 'with-previous': true}})); // subscribing to nodes
-      self.ws.send(JSON.stringify({'subscribe-origin' : {'subscribe': true, 'with-previous': true}})); // subscribing to origins
-    });
-    this.ws.addEventListener('close', function () {
-      swal({
-        type: 'error',
-        title: 'server unavailable, try again...',
-        width: 600,
-        padding: '3em',
-        backdrop: `
+
+    axios.get('http://' + this.apiURL + '/id')
+      .then(function (response) {
+        const packet = response.data;
+
+        self.handleGetId(packet['get-id']);
+
+        self.ws = new WebSocket('ws://' + self.apiURL + '/ws');
+
+        self.ws.addEventListener('open', function () {
+          self.ws.send(JSON.stringify({'subscribe-message' : {'subscribe': true, 'with-previous': true}})); // subscribing to messages
+          self.ws.send(JSON.stringify({'subscribe-node' : {'subscribe': true, 'with-previous': true}})); // subscribing to nodes
+          self.ws.send(JSON.stringify({'subscribe-origin' : {'subscribe': true, 'with-previous': true}})); // subscribing to origins
+          self.ws.send(JSON.stringify({'subscribe-file' : {'subscribe': true, 'with-previous': true}})); // subscribing to files
+        });
+
+        self.ws.addEventListener('close', function () {
+          swal({
+            type: 'error',
+            title: 'server unavailable, try again...',
+            width: 600,
+            padding: '3em',
+            backdrop: `
           rgba(0,0,123,0.4)
           url("https://sweetalert2.github.io/images/nyan-cat.gif")
           center left
           no-repeat
         `,
-        showConfirmButton: false,
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-      })
-    });
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+          })
+        });
 
-    this.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
+        self.ws.addEventListener('message', function (e) { // here we receive packets from the websocket
 
-      const packet = JSON.parse(e.data);
-      console.log(packet);
+          const packet = JSON.parse(e.data);
+          console.log(packet);
 
-      if (packet['get-id']) {
-        self.handleGetId(packet['get-id']);
-        return;
-      }
+          if (packet['get-id']) {
+            //self.handleGetId(packet['get-id']);
+            console.log('not expection get-id message');
+            return;
+          }
 
-      if (packet.rumor) { // rumor message packet
-        self.rumors.push(packet.rumor);
-        return;
-      }
+          if (packet.rumor) { // rumor message packet
+            self.rumors.push(packet.rumor);
+            return;
+          }
 
-      if (packet.private) {
-        const msg = packet.private;
-        self.handlePrivateMsg(msg);
-        return;
-      }
+          if (packet.private) {
+            const msg = packet.private;
+            self.handlePrivateMsg(msg);
+            return;
+          }
 
-      if (packet.peer) { // node packet
-        self.handlePeer(packet.peer);
-        return;
-      }
+          if (packet.peer) { // node packet
+            self.handlePeer(packet.peer);
+            return;
+          }
 
-      if (packet.contact) {
-        self.handleContact(packet.contact);
-        return;
-      }
+          if (packet.contact) {
+            self.handleContact(packet.contact.origin);
+            return;
+          }
 
-      console.log("packet not handled: " + JSON.stringify(packet));
-    });
+          if (packet.file) {
+            self.handleFile(packet.file);
+            return;
+          }
+
+          console.error("packet not handled: " + JSON.stringify(packet));
+        });
+
+      });
   },
 
   methods: {
@@ -152,21 +171,6 @@ export default {
       };
       this.ws.send(JSON.stringify(msgPacket));
     },
-
-    onContactClick: function (contact) {
-      this.selectedDest = contact;
-      this.selectedDestChat = this.privates.get(contact).messages;
-      this.setNumUnread(contact, 0);
-    },
-
-    setNumUnread: function(contact, numUnread) {
-      this.originsAndBadges.forEach(function (o) {
-        if (o.origin === contact){
-          o.numUnread = numUnread;
-        }
-      });
-    },
-
     backToRumors: function () {
       this.selectedDest = '';
       this.selectedDestChat = null;
@@ -188,7 +192,6 @@ export default {
     handleGetId: function (get_id) {
       const self = this;
       self.myOrigin = get_id.id;
-      self.privateMsgBuffer.forEach(self.handlePrivateMsg);
     },
 
     handlePrivateMsg: function (msg) {
@@ -197,30 +200,23 @@ export default {
         self.addPrivateMsg(msg.origin, msg);
       } else if (self.privates.has(msg.destination)) {
         self.addPrivateMsg(msg.destination, msg);
-      } else if (msg.origin === self.myOrigin) {
-        self.addPrivateMsg(msg.destination, msg);
       } else if (msg.destination === self.myOrigin) {
         self.addPrivateMsg(msg.origin, msg);
-      } else if (self.myOrigin === '') {
-        self.privateMsgBuffer.push(msg);
+      } else if (msg.origin === self.myOrigin) {
+        self.addPrivateMsg(msg.destination, msg);
       } else {
-        console.log("strange private message: " + JSON.stringify(msg));
+        console.error("I am <"+ self.myOrigin +"> receiving unexpected message: " + JSON.stringify(msg));
       }
     },
 
-    addPrivateMsg: function (contact, msg) {
+    addPrivateMsg: function (contactName, msg) {
       const self = this;
-      if (self.privates.has(contact)) {
-        self.privates.get(contact).messages.push(msg);
-        if (msg.origin !== self.myOrigin) {
-          self.originsAndBadges.forEach(function (o) {
-            if (o.origin === contact){
-              o.numUnread += 1;
-            }
-          })
-        }
+      const contact = self.handleContact(contactName);
+      self.privates.get(contactName).messages.push(msg);
+      if (msg.origin !== self.myOrigin) {
+        contact.numUnread += 1;
       } else {
-        self.privates.set(contact, self.newPrivateObject(msg))
+        contact.numUnread = 0;
       }
     },
 
@@ -239,25 +235,49 @@ export default {
       self.nodes.push(peer);
     },
 
-    handleContact: function (contact) {
+    handleContact: function (contactName) {
       const self = this;
-      if (contact.origin !== self.myOrigin) {
-        self.originsAndBadges.push(self.newOriginObject(contact.origin));
-        if (!self.privates.has(contact.origin)){
-          self.privates.set(contact.origin, self.newPrivateObject())
-        }
+      if (!self.privates.has(contactName)){
+        self.privates.set(contactName, self.newPrivateObject());
+        const contact = self.newContactObject(contactName);
+        self.originsAndBadges.push(contact);
+        return contact;
       }
+      // we have the contact already if we skipped if the if clause
+      return self.getContact(contactName);
     },
 
-    newOriginObject: function (origin) {
+    newContactObject: function (contactName) {
       return {
-        origin: origin,
+        name: contactName,
         numUnread: 0,
       }
     },
 
-    indexFile: function (file) {
-      console.log(file)
+    onContactClick: function (contactName) {
+      this.selectedDest = contactName;
+      this.selectedDestChat = this.privates.get(contactName).messages;
+      this.getContact(contactName).numUnread = 0;
+    },
+
+    getContact: function(contactName) {
+      const self = this;
+      return self.originsAndBadges.find(function (contact) {
+        return contact.name === contactName
+      });
+    },
+
+    handleFile: function (file) {
+      this.files.push(file.filename)
+    },
+
+    indexFile: function (filename) {
+      const indexFile = {
+        'index-file': {
+          'filename': filename
+        }
+      };
+      this.ws.send(JSON.stringify(indexFile));
     },
   },
 }
@@ -299,6 +319,18 @@ a {
 main {
   flex: 1 0 auto;
 }
+
+.app-title {
+  left: 10px;
+}
+#logo {
+  height: 2.1rem;
+}
+
+.chip {
+  display: inline-flex;
+}
+
 .back-button {
   /*margin-top: 50px;*/
 }
