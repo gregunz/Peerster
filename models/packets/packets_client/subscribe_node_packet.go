@@ -8,7 +8,7 @@ type SubscribeNodePacket struct {
 }
 
 func (packet *SubscribeNodePacket) AckPrint() {
-	fmt.Printf(packet.String())
+	fmt.Println(packet.String())
 }
 
 func (packet SubscribeNodePacket) String() string {
@@ -18,8 +18,8 @@ func (packet SubscribeNodePacket) String() string {
 		if packet.WithPrevious {
 			with = "with"
 		}
-		return fmt.Sprintf("%s %s previous nodes\n", text, with)
+		return fmt.Sprintf("%s %s previous nodes", text, with)
 	} else {
-		return fmt.Sprintf("UN%s\n", text)
+		return fmt.Sprintf("UN%s", text)
 	}
 }

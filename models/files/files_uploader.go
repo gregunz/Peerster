@@ -8,8 +8,8 @@ import (
 )
 
 type uploader struct {
-	filenameToFile map[string]*fileType
-	chunksToFile   map[string]*fileType
+	filenameToFile map[string]*FileType
+	chunksToFile   map[string]*FileType
 	FileChan       FileChan
 	mux            sync.Mutex
 }
@@ -18,13 +18,13 @@ type Uploader interface {
 	IndexFile(filename string)
 	HasChunk(chunkHash []byte) bool
 	GetData(chunkHash []byte) []byte
-	GetFilenames() []string
+	GetAllFiles() []*FileType
 }
 
 func NewFilesUploader() *uploader {
 	return &uploader{
-		filenameToFile: map[string]*fileType{},
-		chunksToFile:   map[string]*fileType{},
+		filenameToFile: map[string]*FileType{},
+		chunksToFile:   map[string]*FileType{},
 		FileChan:       NewFileChan(true),
 	}
 }
@@ -44,7 +44,7 @@ func (uploader *uploader) IndexFile(filename string) {
 	}
 	uploader.chunksToFile[file.MetaHash] = file
 	uploader.filenameToFile[filename] = file
-	uploader.FileChan.Push(filename)
+	uploader.FileChan.Push(file)
 	fmt.Printf("new file indexed with hash %s\n", file.MetaHash)
 	for _, hash := range file.Hashes {
 		if _, ok := uploader.chunksToFile[hash]; ok {
@@ -54,15 +54,15 @@ func (uploader *uploader) IndexFile(filename string) {
 	}
 }
 
-func (uploader *uploader) GetFilenames() []string {
+func (uploader *uploader) GetAllFiles() []*FileType {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
-	var filenames []string
-	for filename := range uploader.filenameToFile {
-		filenames = append(filenames, filename)
+	var files []*FileType
+	for _, file := range uploader.filenameToFile {
+		files = append(files, file)
 	}
-	return filenames
+	return files
 }
 
 func (uploader *uploader) HasChunk(chunkHash []byte) bool {

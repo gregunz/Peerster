@@ -1,19 +1,20 @@
 package responses_client
 
 import (
-	"github.com/gregunz/Peerster/models/packets/packets_client"
+	"github.com/gregunz/Peerster/models/files"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 	"github.com/microcosm-cc/bluemonday"
 )
 
 type ClientResponse struct {
-	GetId   *GetIdResponse                   `json:"get-id"`
-	Peer    *PeerResponse                    `json:"peer"`
-	Rumor   *packets_gossiper.RumorMessage   `json:"rumor"`
-	Private *packets_gossiper.PrivateMessage `json:"private"`
-	Contact *ContactResponse                 `json:"contact"`
-	File    *packets_client.IndexFilePacket  `json:"file"`
+	GetId          *GetIdResponse                   `json:"get-id"`
+	Peer           *PeerResponse                    `json:"peer"`
+	Rumor          *packets_gossiper.RumorMessage   `json:"rumor"`
+	Private        *packets_gossiper.PrivateMessage `json:"private"`
+	Contact        *ContactResponse                 `json:"contact"`
+	IndexedFile    *FileResponse                    `json:"indexed-file"`
+	DownloadedFile *FileResponse                    `json:"downloaded-file"`
 }
 
 func NewGetIdResponse(id string, policy *bluemonday.Policy) *ClientResponse {
@@ -48,8 +49,22 @@ func NewContactResponse(origin string, policy *bluemonday.Policy) *ClientRespons
 	}
 }
 
-func NewFileResponse(filename string, policy *bluemonday.Policy) *ClientResponse {
+func NewIndexedFileResponse(file *files.FileType, policy *bluemonday.Policy) *ClientResponse {
 	return &ClientResponse{
-		File: &packets_client.IndexFilePacket{Filename: policy.Sanitize(filename)},
+		IndexedFile: &FileResponse{
+			Filename: policy.Sanitize(file.Name),
+			MetaHash: policy.Sanitize(file.MetaHash),
+			Size:     file.Size,
+		},
+	}
+}
+
+func NewDownloadedFileResponse(file *files.FileType, policy *bluemonday.Policy) *ClientResponse {
+	return &ClientResponse{
+		DownloadedFile: &FileResponse{
+			Filename: policy.Sanitize(file.Name),
+			MetaHash: policy.Sanitize(file.MetaHash),
+			Size:     file.Size,
+		},
 	}
 }

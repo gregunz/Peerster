@@ -2,6 +2,7 @@ package files
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/models/timeouts"
 	"github.com/gregunz/Peerster/utils"
@@ -16,6 +17,7 @@ const (
 type downloader struct {
 	awaitingMetafiles map[string]*awaitingMetafile
 	awaitingChunks    map[string]*awaitingChunk
+	FileChan          FileChan
 	mux               sync.Mutex
 }
 
@@ -39,6 +41,7 @@ func NewFilesDownloader() *downloader {
 	return &downloader{
 		awaitingMetafiles: map[string]*awaitingMetafile{},
 		awaitingChunks:    map[string]*awaitingChunk{},
+		FileChan:          NewFileChan(true),
 	}
 }
 
@@ -97,7 +100,12 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) []str
 			delete(downloader.awaitingChunks, hash)
 		}
 		if builder.IsComplete() {
-			builder.Build()
+			file := builder.Build()
+			if file != nil {
+				downloader.FileChan.Push(file)
+			} else {
+				common.HandleError(fmt.Errorf("build of file failed"))
+			}
 		}
 	}
 	return nil

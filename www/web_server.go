@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/gossiper"
+	"github.com/gregunz/Peerster/models/files"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/packets/responses_client"
@@ -16,12 +17,13 @@ import (
 )
 
 type WebServer struct {
-	gossiper   *gossiper.Gossiper
-	clientChan chan *ClientChannelElement
-	allRumors  []*packets_gossiper.RumorMessage
-	allPrivate []*packets_gossiper.PrivateMessage
-	clients    map[Writer]*client
-	policy     *bluemonday.Policy
+	gossiper        *gossiper.Gossiper
+	clientChan      chan *ClientChannelElement
+	allRumors       []*packets_gossiper.RumorMessage
+	allPrivate      []*packets_gossiper.PrivateMessage
+	downloadedFiles []*files.FileType
+	clients         map[Writer]*client
+	policy          *bluemonday.Policy
 }
 
 // Configure the upgrader
@@ -43,7 +45,6 @@ func NewWebServer(g *gossiper.Gossiper) *WebServer {
 	return &WebServer{
 		gossiper:   g,
 		clientChan: make(chan *ClientChannelElement, 1),
-		allRumors:  []*packets_gossiper.RumorMessage{},
 		clients:    map[Writer]*client{},
 		policy:     p,
 	}
@@ -67,7 +68,8 @@ func (server *WebServer) Start() {
 	go server.handlePrivateSubscriptions()
 	go server.handleNodeSubscriptions()
 	go server.handleOriginsSubscriptions()
-	go server.handleFilesSubscriptions()
+	go server.handleIndexedFilesSubscriptions()
+	go server.handleDownloadedFilesSubscriptions()
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
@@ -144,13 +146,26 @@ func (server *WebServer) handleOriginsSubscriptions() {
 	}
 }
 
-func (server *WebServer) handleFilesSubscriptions() {
+func (server *WebServer) handleIndexedFilesSubscriptions() {
 	for {
-		filename := server.gossiper.FilesChan.Get()
-		if filename != "" {
+		file := server.gossiper.IndexedFilesChan.Get()
+		if file != nil {
 			for w, c := range server.clients {
 				if c.IsSubscribedToFiles {
-					common.HandleError(w.WriteJSON(responses_client.NewFileResponse(filename, server.policy)))
+					common.HandleError(w.WriteJSON(responses_client.NewIndexedFileResponse(file, server.policy)))
+				}
+			}
+		}
+	}
+}
+func (server *WebServer) handleDownloadedFilesSubscriptions() {
+	for {
+		file := server.gossiper.DownloadedFilesChan.Get()
+		if file != nil {
+			server.downloadedFiles = append(server.downloadedFiles, file)
+			for w, c := range server.clients {
+				if c.IsSubscribedToFiles {
+					common.HandleError(w.WriteJSON(responses_client.NewDownloadedFileResponse(file, server.policy)))
 				}
 			}
 		}
@@ -159,7 +174,7 @@ func (server *WebServer) handleFilesSubscriptions() {
 
 func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Writer, isRest bool) {
 
-	packet.AckPrint()
+	fmt.Printf("[GUI] received packet <%s>\n", packet.String())
 
 	client := server.clients[w]
 
@@ -254,8 +269,11 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		if !client.IsSubscribedToFiles && packet.SubscribeFile.Subscribe {
 			client.IsSubscribedToFiles = true
 			if packet.SubscribeFile.WithPrevious {
-				for _, filename := range server.gossiper.FilesUploader.GetFilenames() {
-					common.HandleError(w.WriteJSON(responses_client.NewFileResponse(filename, server.policy)))
+				for _, file := range server.gossiper.FilesUploader.GetAllFiles() {
+					common.HandleError(w.WriteJSON(responses_client.NewIndexedFileResponse(file, server.policy)))
+				}
+				for _, filename := range server.downloadedFiles {
+					common.HandleError(w.WriteJSON(responses_client.NewDownloadedFileResponse(filename, server.policy)))
 				}
 			}
 		} else if client.IsSubscribedToFiles && !packet.SubscribeFile.Subscribe {

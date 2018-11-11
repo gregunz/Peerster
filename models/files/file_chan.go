@@ -3,8 +3,8 @@ package files
 import "github.com/gregunz/Peerster/models/updates"
 
 type FileChan interface {
-	Get() string
-	Push(filename string)
+	Get() *FileType
+	Push(file *FileType)
 }
 
 type fileChan struct {
@@ -15,14 +15,14 @@ func NewFileChan(activated bool) FileChan {
 	return &fileChan{ch: updates.NewChan(activated)}
 }
 
-func (ch *fileChan) Push(filename string) {
-	ch.ch.Push(filename)
+func (ch *fileChan) Push(file *FileType) {
+	ch.ch.Push(file)
 }
 
-func (ch *fileChan) Get() string {
-	filename, ok := ch.ch.Get().(string)
+func (ch *fileChan) Get() *FileType {
+	file, ok := ch.ch.Get().(*FileType)
 	if !ok {
-		return ""
+		return nil
 	}
-	return filename
+	return file
 }

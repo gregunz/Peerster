@@ -14,9 +14,9 @@ func (packet PostNodePacket) ToPeer() *peers.Peer {
 }
 
 func (packet *PostNodePacket) AckPrint() {
-	fmt.Printf(packet.String())
+	fmt.Println(packet.String())
 }
 
 func (packet PostNodePacket) String() string {
-	return fmt.Sprintf("ADD NODE %s\n", packet.Node)
+	return fmt.Sprintf("ADD NODE %s", packet.Node)
 }

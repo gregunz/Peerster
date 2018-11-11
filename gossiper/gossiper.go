@@ -34,23 +34,24 @@ type Gossiper struct {
 	gossiperConn   *net.UDPConn
 	rTimerDuration time.Duration
 
-	Origin          string
-	GossipAddr      *peers.Address
-	ClientAddr      *peers.Address
-	GUIPort         uint
-	FromClientChan  chan *packets_client.ClientPacket
-	FromGossipChan  chan *GossipChannelElement
-	NodeChan        peers.NodeChan
-	RumorChan       vector_clock.RumorChan
-	OriginChan      routing.OriginChan
-	PrivateMsgChan  conv.PrivateMsgChan
-	PeersSet        *peers.Set
-	VectorClock     vector_clock.VectorClock
-	RoutingTable    routing.Table
-	Conversations   conv.Conversation
-	FilesUploader   files.Uploader
-	FilesChan       files.FileChan
-	FilesDownloader files.Downloader
+	Origin              string
+	GossipAddr          *peers.Address
+	ClientAddr          *peers.Address
+	GUIPort             uint
+	FromClientChan      chan *packets_client.ClientPacket
+	FromGossipChan      chan *GossipChannelElement
+	NodeChan            peers.NodeChan
+	RumorChan           vector_clock.RumorChan
+	OriginChan          routing.OriginChan
+	PrivateMsgChan      conv.PrivateMsgChan
+	PeersSet            *peers.Set
+	VectorClock         vector_clock.VectorClock
+	RoutingTable        routing.Table
+	Conversations       conv.Conversation
+	FilesUploader       files.Uploader
+	IndexedFilesChan    files.FileChan
+	FilesDownloader     files.Downloader
+	DownloadedFilesChan files.FileChan
 
 	mux sync.Mutex
 }
@@ -87,22 +88,23 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		gossiperConn:   peerConn,
 		rTimerDuration: time.Duration(rTimerDuration) * time.Second,
 
-		Origin:          name,
-		GossipAddr:      address,
-		GUIPort:         guiPort,
-		FromClientChan:  make(chan *packets_client.ClientPacket),
-		FromGossipChan:  make(chan *GossipChannelElement),
-		NodeChan:        updatesChannels,
-		RumorChan:       updatesChannels,
-		PrivateMsgChan:  updatesChannels,
-		OriginChan:      updatesChannels,
-		PeersSet:        peersSet,
-		VectorClock:     vectorClock,
-		RoutingTable:    routingTable,
-		Conversations:   conversations,
-		FilesUploader:   uploader,
-		FilesChan:       uploader.FileChan,
-		FilesDownloader: downloader,
+		Origin:              name,
+		GossipAddr:          address,
+		GUIPort:             guiPort,
+		FromClientChan:      make(chan *packets_client.ClientPacket),
+		FromGossipChan:      make(chan *GossipChannelElement),
+		NodeChan:            updatesChannels,
+		RumorChan:           updatesChannels,
+		PrivateMsgChan:      updatesChannels,
+		OriginChan:          updatesChannels,
+		PeersSet:            peersSet,
+		VectorClock:         vectorClock,
+		RoutingTable:        routingTable,
+		Conversations:       conversations,
+		FilesUploader:       uploader,
+		IndexedFilesChan:    uploader.FileChan,
+		FilesDownloader:     downloader,
+		DownloadedFilesChan: downloader.FileChan,
 	}
 }
 

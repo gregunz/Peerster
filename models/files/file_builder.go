@@ -77,7 +77,7 @@ func (file *fileBuilder) AddChunks(chunks ...[]byte) bool {
 	return atLeastOneAdded
 }
 
-func (file *fileBuilder) Build() bool {
+func (file *fileBuilder) Build() *FileType {
 	file.mux.Lock()
 	defer file.mux.Unlock()
 
@@ -86,7 +86,7 @@ func (file *fileBuilder) Build() bool {
 		chunk := file.hashToChunks[hash]
 		if chunk == nil {
 			common.HandleAbort("cannot build because some chunks are missing", nil)
-			return false
+			return nil
 		}
 		fileBytes = append(fileBytes, chunk...)
 	}
@@ -94,7 +94,7 @@ func (file *fileBuilder) Build() bool {
 	err := ioutil.WriteFile(path, fileBytes, 0644)
 	if err != nil {
 		common.HandleAbort(fmt.Sprintf("cannot save file in %s", path), err)
-		return false
+		return nil
 	}
-	return true
+	return NewFile(file.name)
 }

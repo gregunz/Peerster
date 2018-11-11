@@ -8,7 +8,7 @@ type SubscribeOriginPacket struct {
 }
 
 func (packet *SubscribeOriginPacket) AckPrint() {
-	fmt.Printf(packet.String())
+	fmt.Println(packet.String())
 }
 
 func (packet SubscribeOriginPacket) String() string {
@@ -18,8 +18,8 @@ func (packet SubscribeOriginPacket) String() string {
 		if packet.WithPrevious {
 			with = "with"
 		}
-		return fmt.Sprintf("%s %s previous origins\n", text, with)
+		return fmt.Sprintf("%s %s previous origins", text, with)
 	} else {
-		return fmt.Sprintf("UN%s\n", text)
+		return fmt.Sprintf("UN%s", text)
 	}
 }

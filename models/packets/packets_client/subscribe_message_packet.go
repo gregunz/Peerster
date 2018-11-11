@@ -8,7 +8,7 @@ type SubscribeMessagePacket struct {
 }
 
 func (packet *SubscribeMessagePacket) AckPrint() {
-	fmt.Printf(packet.String())
+	fmt.Println(packet.String())
 }
 
 func (packet SubscribeMessagePacket) String() string {
@@ -18,8 +18,8 @@ func (packet SubscribeMessagePacket) String() string {
 		if packet.WithPrevious {
 			with = "with"
 		}
-		return fmt.Sprintf("%s %s previous messages\n", text, with)
+		return fmt.Sprintf("%s %s previous messages", text, with)
 	} else {
-		return fmt.Sprintf("UN%s\n", text)
+		return fmt.Sprintf("UN%s", text)
 	}
 }

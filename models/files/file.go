@@ -17,8 +17,8 @@ const (
 	HashSize      = sha256.Size
 )
 
-type fileType struct {
-	name     string
+type FileType struct {
+	Name     string
 	Size     int
 	Hashes   []string
 	MetaFile []byte
@@ -29,7 +29,7 @@ func nameToPath(name string) string {
 	return sharedPath + name
 }
 
-func NewFile(name string) *fileType {
+func NewFile(name string) *FileType {
 	fileBytes, err := ioutil.ReadFile(nameToPath(name))
 	if err != nil {
 		common.HandleAbort(fmt.Sprintf("could not read %s", name), err)
@@ -50,8 +50,8 @@ func NewFile(name string) *fileType {
 
 	metaHash := sha256.Sum256(metafile)
 
-	return &fileType{
-		name:     name,
+	return &FileType{
+		Name:     name,
 		Size:     fileSize,
 		Hashes:   hashes,
 		MetaFile: metafile,
@@ -59,7 +59,7 @@ func NewFile(name string) *fileType {
 	}
 }
 
-func (file *fileType) GetChunkOrMetafile(hash string) ([]byte, error) {
+func (file *FileType) GetChunkOrMetafile(hash string) ([]byte, error) {
 	if hash == file.MetaHash {
 		return file.MetaFile, nil
 	}
@@ -67,12 +67,12 @@ func (file *fileType) GetChunkOrMetafile(hash string) ([]byte, error) {
 		if h == hash {
 			from := i * ChunkSize
 			to := utils.Min((i+1)*ChunkSize, file.Size)
-			fileBytes, err := ioutil.ReadFile(nameToPath(file.name))
+			fileBytes, err := ioutil.ReadFile(nameToPath(file.Name))
 			if err != nil {
 				return nil, err
 			}
 			return fileBytes[from:to], nil
 		}
 	}
-	return nil, fmt.Errorf("no chunks with corresponding hash %s in file %s", hash, file.name)
+	return nil, fmt.Errorf("no chunks with corresponding hash %s in file %s", hash, file.Name)
 }

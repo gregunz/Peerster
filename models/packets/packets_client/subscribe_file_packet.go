@@ -8,7 +8,7 @@ type SubscribeFilePacket struct {
 }
 
 func (packet *SubscribeFilePacket) AckPrint() {
-	fmt.Printf(packet.String())
+	fmt.Println(packet.String())
 }
 
 func (packet SubscribeFilePacket) String() string {
@@ -18,8 +18,8 @@ func (packet SubscribeFilePacket) String() string {
 		if packet.WithPrevious {
 			with = "with"
 		}
-		return fmt.Sprintf("%s %s previously indexed files\n", text, with)
+		return fmt.Sprintf("%s %s previously indexed files", text, with)
 	} else {
-		return fmt.Sprintf("UN%s\n", text)
+		return fmt.Sprintf("UN%s", text)
 	}
 }

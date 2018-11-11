@@ -16,7 +16,7 @@ func (packet PostMessagePacket) String() string {
 	if packet.Destination != "" {
 		toStr = fmt.Sprintf("to %s", packet.Destination)
 	}
-	return fmt.Sprintf("POST MESSAGE %s%s\n", packet.Message, toStr)
+	return fmt.Sprintf("POST MESSAGE %s%s", packet.Message, toStr)
 }
 
 func (packet *PostMessagePacket) ToClientPacket() *ClientPacket {
