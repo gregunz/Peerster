@@ -24,21 +24,37 @@
             Back to Rumors
           </button>
         </div>
-        <list-with-input
+        <simple-list
+          title="Nodes"
           :list="nodes"
           :elem-to-string="nodeToString"
+        />
+        <simple-input
+          placeholder-text="ip:port"
           :button-action="sendNode"
-          title="Nodes"
           button-text="Add"
-          button-icon="router">
-        </list-with-input>
-        <list-with-input
-          :list="files"
-          :button-action="indexFile"
+          button-icon="router"
+        />
+        <simple-list
           title="Indexed Files"
+          :list="indexedFiles"
+          :elem-to-string="fileToString"
+        />
+        <simple-input
+          placeholder-text="filename"
+          :button-action="indexFile"
           button-text="Index"
-          button-icon="create_new_folder">
-        </list-with-input>
+          button-icon="create_new_folder"
+        />
+        <simple-list
+          title="Downloaded Files"
+          :list="downloadedFiles"
+          :elem-to-string="fileToString"
+        />
+        <request-file
+          :sendFileRequest="requestFile"
+          :contacts="originsAndBadges"
+        />
       </div>
     </div>
 
@@ -48,15 +64,17 @@
 
 <script>
 import Chat from "./components/Chat";
-import ListWithInput from "./components/ListWithInput"
+import SimpleList from "./components/SimpleList"
 import Contacts from "./components/Contacts";
 import Chip from "./components/Chip";
 import swal from "sweetalert2"
 import axios from "axios";
+import SimpleInput from "./components/SimpleInput";
+import RequestFile from "./components/RequestFile";
 
 export default {
   name: 'app',
-  components: {Chip, Contacts, Chat, ListWithInput},
+  components: {RequestFile, SimpleInput, Chip, Contacts, Chat, SimpleList},
   data () {
     return {
       apiURL: '',
@@ -66,7 +84,8 @@ export default {
       selectedDest: '',
       selectedDestChat: [],
       nodes: [],
-      files: [],
+      indexedFiles: [],
+      downloadedFiles: [],
       originsAndBadges: [],
       myOrigin: '',
     }
@@ -141,8 +160,13 @@ export default {
             return;
           }
 
-          if (packet.file) {
-            self.handleFile(packet.file);
+          if (packet["indexed-file"]) {
+            self.handleIndexedFile(packet["indexed-file"]);
+            return;
+          }
+
+          if (packet["downloaded-file"]) {
+            self.handleDownloadedFile(packet["downloaded-file"]);
             return;
           }
 
@@ -267,18 +291,37 @@ export default {
       });
     },
 
-    handleFile: function (file) {
-      this.files.push(file.filename)
+    handleIndexedFile: function (indexedFile) {
+      this.indexedFiles.push(indexedFile)
     },
 
     indexFile: function (filename) {
-      const indexFile = {
+      const indexFilePacket = {
         'index-file': {
           'filename': filename
         }
       };
-      this.ws.send(JSON.stringify(indexFile));
+      this.ws.send(JSON.stringify(indexFilePacket));
     },
+
+    handleDownloadedFile: function (downloadedFile) {
+      this.downloadedFiles.push(downloadedFile)
+    },
+
+    requestFile: function (destination, filename, request) {
+      const requestFilePacket = {
+        'request-file': {
+          'destination': destination,
+          'filename': filename,
+          'request': request,
+        }
+      };
+      this.ws.send(JSON.stringify(requestFilePacket));
+    },
+
+    fileToString: function (file) {
+      return file.filename + " (" + (file.size/1024).toFixed(1) + "KB" + " - " + file["meta-hash"] + ")";
+    }
   },
 }
 </script>

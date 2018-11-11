@@ -8,7 +8,7 @@
     <div class="col s12">
       <div class="card horizontal">
         <div class="card-content">
-          <div v-for="o of originsAndBadges" v-on:click="onContactClick(o.name)">
+          <div v-for="o in originsAndBadges" v-on:click="onContactClick(o.name)">
             <chip :name="o.name"></chip>
             <span class="new badge" v-if="o.numUnread > 0">{{toBadgeString(o.numUnread)}}</span>
           </div>
