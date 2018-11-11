@@ -33,7 +33,7 @@ func (uploader *uploader) IndexFile(filename string) {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
-	file := NewFile(filename)
+	file := NewFile(nameToSharedPath(filename))
 	if file == nil {
 		return
 	}

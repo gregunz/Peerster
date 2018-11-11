@@ -7,6 +7,7 @@ import (
 	"github.com/gregunz/Peerster/utils"
 	"io/ioutil"
 	"math"
+	"path/filepath"
 )
 
 const (
@@ -25,14 +26,18 @@ type FileType struct {
 	MetaHash string
 }
 
-func nameToPath(name string) string {
+func nameToSharedPath(name string) string {
 	return sharedPath + name
 }
 
-func NewFile(name string) *FileType {
-	fileBytes, err := ioutil.ReadFile(nameToPath(name))
+func nameToDownloadsPath(name string) string {
+	return downloadsPath + name
+}
+
+func NewFile(path string) *FileType {
+	fileBytes, err := ioutil.ReadFile(path)
 	if err != nil {
-		common.HandleAbort(fmt.Sprintf("could not read %s", name), err)
+		common.HandleAbort(fmt.Sprintf("could not read %s", path), err)
 		return nil
 	}
 
@@ -51,7 +56,7 @@ func NewFile(name string) *FileType {
 	metaHash := sha256.Sum256(metafile)
 
 	return &FileType{
-		Name:     name,
+		Name:     filepath.Base(path),
 		Size:     fileSize,
 		Hashes:   hashes,
 		MetaFile: metafile,
@@ -67,7 +72,7 @@ func (file *FileType) GetChunkOrMetafile(hash string) ([]byte, error) {
 		if h == hash {
 			from := i * ChunkSize
 			to := utils.Min((i+1)*ChunkSize, file.Size)
-			fileBytes, err := ioutil.ReadFile(nameToPath(file.Name))
+			fileBytes, err := ioutil.ReadFile(nameToSharedPath(file.Name))
 			if err != nil {
 				return nil, err
 			}

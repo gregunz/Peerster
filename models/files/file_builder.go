@@ -90,11 +90,11 @@ func (file *fileBuilder) Build() *FileType {
 		}
 		fileBytes = append(fileBytes, chunk...)
 	}
-	path := downloadsPath + file.name
+	path := nameToDownloadsPath(file.name)
 	err := ioutil.WriteFile(path, fileBytes, 0644)
 	if err != nil {
 		common.HandleAbort(fmt.Sprintf("cannot save file in %s", path), err)
 		return nil
 	}
-	return NewFile(file.name)
+	return NewFile(path)
 }
