@@ -24,7 +24,7 @@ const (
 	antiEntropyDuration = 1 * time.Second
 	udpPacketMaxSize    = 65536
 	hopLimit            = 10
-	debug               = true
+	debug               = false
 )
 
 type Gossiper struct {
