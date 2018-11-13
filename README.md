@@ -8,8 +8,10 @@ To display help, from the root directory:
 go run *.go -h
 ```
 ```
+  -GUI
+    	whether GUI is enabled (set to true if GUIPort != 0)
   -GUIPort uint
-    	port for the GUI client (default 8080)
+    	port for the GUI client (if 0, a port is randomly assigned)
   -UIPort uint
     	port for the UI client (default 8080)
   -gossipAddr value
@@ -18,6 +20,8 @@ go run *.go -h
     	name of the gossiper
   -peers value
     	comma-separated list of peers of the form ip:port
+  -rtimer uint
+    	route rumors sending period in seconds, 0 to disable sending of route rumors
   -simple
     	run gossiper in simple broadcast mode
 ```
@@ -37,8 +41,14 @@ go run *.go -h
 ```
   -UIPort uint
     	port for the UI client (default 8080)
+  -dest string
+    	destination for the private message or file request
+  -file string
+    	filename to be indexed by the gossiper
   -msg string
     	message to be sent
+  -request string
+    	request metafile of this hash
 ```
 For example:
 ```
@@ -48,11 +58,9 @@ go run *.go -UIPort=8080 -msg="message content here"
 ### GUI
 The Graphical User Interface (GUI) will be available at:
 ```
-http://localhost:8080/gui/
+http://localhost:8080/
 ```
-when running the main application (depending on the port for GUIPort you choose) (the last '/' is important).
-
-This graphical interface assumes that the gossiper is used as group chat where messages are "read once". The app will not reload all the previous messages after closing your browser. But the messages that arrived while your browser was closed will still be accessible and received (no messages are left unseen). One could still restart the gossiper such that the GUI receives again all the messages if needed.
+when running the main application (depending on the port for GUIPort you choose).
 
 ## Notes
 This project was done during this course:
