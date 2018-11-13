@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/dedis/protobuf"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/conv"
 	"github.com/gregunz/Peerster/models/files"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
@@ -13,7 +14,6 @@ import (
 	"github.com/gregunz/Peerster/models/updates"
 	"github.com/gregunz/Peerster/models/vector_clock"
 	"github.com/gregunz/Peerster/utils"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -59,8 +59,8 @@ type Gossiper struct {
 func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.Set,
 	rTimerDuration uint) *Gossiper {
 
-	log.Printf("Gossiper created: named <%s> listening peers on ip:port <%s> "+
-		"and listening local clients on port <%d> with peers <%s>\n",
+	logger.Printlnf("Gossiper created: named <%s> listening peers on ip:port <%s> "+
+		"and listening local clients on port <%d> with peers <%s>",
 		name, address.ToIpPort(), uiPort, peersSet.ToString("> <"))
 
 	mode := NewDefaultMode()

@@ -7,12 +7,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/gossiper"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/files"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/packets/responses_client"
 	"github.com/microcosm-cc/bluemonday"
-	"log"
 	"net/http"
 )
 
@@ -73,7 +73,7 @@ func (server *WebServer) Start() {
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
-	log.Print("WebServer running...\n")
+	logger.Printlnf("WebServer running...")
 	err := http.ListenAndServe(port, router)
 	if err != nil {
 		common.HandleAbort("ListenAndServe: ", err)
@@ -305,7 +305,7 @@ func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.R
 	if !ok {
 		c = NewClient()
 		server.clients[w] = c
-		log.Printf("<web-server> new client just arrived")
+		logger.Printlnf("<web-server> new client just arrived")
 	}
 
 	for {

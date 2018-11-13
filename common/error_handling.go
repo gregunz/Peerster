@@ -2,12 +2,12 @@ package common
 
 import (
 	"fmt"
-	"log"
+	"github.com/gregunz/Peerster/logger"
 )
 
 func HandleError(e error) {
 	if e != nil {
-		log.Printf("ERROR: %s\n", e)
+		logger.Printlnf("ERROR: %s", e)
 	}
 }
 func HandleAbort(msg string, e error) {
@@ -15,5 +15,5 @@ func HandleAbort(msg string, e error) {
 	if e != nil {
 		errorString = fmt.Sprintf(":\n\t->ERROR: %s", e)
 	}
-	log.Printf("ABORT: %s%s\n", msg, errorString)
+	logger.Printlnf("ABORT: %s%s\n", msg, errorString)
 }
