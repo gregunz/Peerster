@@ -1,64 +1,53 @@
 #!/usr/bin/env bash
+# received 'debug' mode (boolean) as first arguement ($1)
 
-go build
-cd client
-go build
-cd ..
-
-RED='\033[0;31m'
-NC='\033[0m'
-DEBUG="false"
-
-outputFiles=()
-message=Weather_is_clear
-message2=Winter_is_coming
-
-
-UIPort=12345
-gossipPort=5000
-name='A'
+. ./setup_path.sh $0 $1
 
 # General peerster (gossiper) command
 #./Peerster -UIPort=12345 -gossipPort=127.0.0.1:5001 -name=A -peers=127.0.0.1:5002 > A.out &
 
 for i in `seq 1 10`;
 do
-	outFileName="out/out1/$name.out"
+	outFileName="$outPath/$gossipName.out"
 	peerPort=$((($gossipPort+1)%10+5000))
 	peer="127.0.0.1:$peerPort"
 	gossipAddr="127.0.0.1:$gossipPort"
-	./Peerster -UIPort=$UIPort -gossipAddr=$gossipAddr -name=$name -simple -peers=$peer > $outFileName &
+	./Peerster -UIPort=$UIPort -gossipAddr=$gossipAddr -name=$gossipName -simple -peers=$peer > $outFileName &
 	outputFiles+=("$outFileName")
 	if [[ "$DEBUG" == "true" ]] ; then
-		echo "$name running at UIPort $UIPort and gossipPort $gossipPort"
+		echo "$gossipName running at UIPort $UIPort and gossipPort $gossipPort"
 	fi
 	UIPort=$(($UIPort+1))
 	gossipPort=$(($gossipPort+1))
-	name=$(echo "$name" | tr "A-Y" "B-Z")
+	gossipName=$(echo "$gossipName" | tr "A-Y" "B-Z")
 done
 
 ./client/client -UIPort=12349 -msg=$message
 ./client/client -UIPort=12346 -msg=$message2
 sleep 3
-pkill -f Peerster
 
+#kill $(pgrep -f Peerster)
+#pkill -f Peerster
+#wait -f Peerster > /dev/null
 
 #testing
 failed="F"
 
-if !(grep -q "CLIENT MESSAGE $message" "out/out1/E.out") ; then
+if !(grep -q "CLIENT MESSAGE $message" "$outPath/E.out") ; then
 	failed="T"
 fi
 
-if !(grep -q "CLIENT MESSAGE $message2" "out/out1/B.out") ; then
+if !(grep -q "CLIENT MESSAGE $message2" "$outPath/B.out") ; then
   failed="T"
 fi
 
 if [[ "$failed" == "T" ]] ; then
-	echo -e "${RED}FAILED${NC}"
+	echo "${RED}FAILED${NC}"
 fi
 
 # echo "${outputFiles[@]}"
+
+echo "${BLUE}###CHECK simple message${NC}"
 
 gossipPort=5000
 for i in `seq 0 9`;
@@ -89,11 +78,9 @@ do
 done
 
 if [[ "$failed" == "T" ]] ; then
-    echo -e "${RED}***FAILED***${NC}"
+    echo "${RED}***FAILED***${NC}"
 else
-	echo "***PASSED***"
+	echo "${GREEN}***PASSED***${NC}"
 fi
 
-
-
-#sleep 2
+pkill -f Peerster
