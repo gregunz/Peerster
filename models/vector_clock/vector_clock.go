@@ -47,7 +47,7 @@ func (vector *vectorClock) ToStatusPacket() *packets_gossiper.StatusPacket {
 
 	want := []packets_gossiper.PeerStatus{}
 	for _, h := range vector.handlers {
-		want = append(want, *h.ToPeerStatus())
+		want = append(want, *h.ToPeerStatus()) // safe access (ToPeerStatus does a lock)
 	}
 	return &packets_gossiper.StatusPacket{
 		Want: want,
@@ -63,17 +63,21 @@ func (vector *vectorClock) Compare(statusMap map[string]uint32) (*packets_gossip
 
 	for origin, nextID := range statusMap {
 		h := vector.getOrCreateHandler(origin)
+		h.mux.Lock() // needs to lock -> writing
 		if h.latestID < nextID-1 {
 			remoteHasMsg = true
 		}
+		h.mux.Unlock()
 	}
-	for _, handler := range vector.handlers {
-		nextID, ok := statusMap[handler.origin]
-		if !ok && handler.latestID > 0 {
-			msgToSend = append(msgToSend, handler.messages[1])
-		} else if handler.latestID >= nextID {
-			msgToSend = append(msgToSend, handler.messages[nextID])
+	for _, h := range vector.handlers {
+		h.mux.Lock() // needs to lock -> reading
+		nextID, ok := statusMap[h.origin]
+		if !ok && h.latestID > 0 {
+			msgToSend = append(msgToSend, h.messages[1])
+		} else if h.latestID >= nextID {
+			msgToSend = append(msgToSend, h.messages[nextID])
 		}
+		h.mux.Unlock()
 	}
 
 	if len(msgToSend) > 0 {
