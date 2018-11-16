@@ -1,6 +1,9 @@
 package packets_client
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/gregunz/Peerster/logger"
+)
 
 type RequestFilePacket struct {
 	Destination string `json:"destination"`
@@ -8,12 +11,12 @@ type RequestFilePacket struct {
 	Request     string `json:"request"`
 }
 
-func (packet RequestFilePacket) String() string {
+func (packet *RequestFilePacket) String() string {
 	return fmt.Sprintf("REQUEST FILE %s of %s with hash %s", packet.Filename, packet.Destination, packet.Request)
 }
 
 func (packet *RequestFilePacket) AckPrint() {
-	fmt.Println(packet.String())
+	logger.Printlnf(packet.String())
 }
 
 func (packet *RequestFilePacket) ToClientPacket() *ClientPacket {

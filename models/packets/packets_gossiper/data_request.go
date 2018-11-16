@@ -2,6 +2,7 @@ package packets_gossiper
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/utils"
 )
 
@@ -12,14 +13,14 @@ type DataRequest struct {
 	HashValue   []byte `json:"hash-value"`
 }
 
-func (packet DataRequest) String() string {
+func (packet *DataRequest) String() string {
 	return fmt.Sprintf("DATA REQUEST from %s hop-limit %d hash %s to %s",
 		packet.Origin, packet.HopLimit, utils.HashToHex(packet.HashValue), packet.Destination)
 }
 
 func (packet *DataRequest) AckPrint(myOrigin string) {
 	if myOrigin == packet.Destination {
-		fmt.Println(packet.String())
+		logger.Printlnf(packet.String())
 	}
 }
 

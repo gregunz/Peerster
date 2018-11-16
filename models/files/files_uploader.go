@@ -3,6 +3,7 @@ package files
 import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/utils"
 	"sync"
 )
@@ -21,11 +22,11 @@ type Uploader interface {
 	GetAllFiles() []*FileType
 }
 
-func NewFilesUploader() *uploader {
+func NewFilesUploader(activateChan bool) *uploader {
 	return &uploader{
 		filenameToFile: map[string]*FileType{},
 		chunksToFile:   map[string]*FileType{},
-		FileChan:       NewFileChan(true),
+		FileChan:       NewFileChan(activateChan),
 	}
 }
 
@@ -45,7 +46,7 @@ func (uploader *uploader) IndexFile(filename string) {
 	uploader.chunksToFile[file.MetaHash] = file
 	uploader.filenameToFile[filename] = file
 	uploader.FileChan.Push(file)
-	fmt.Printf("new file indexed with hash %s\n", file.MetaHash)
+	logger.Printlnf("new file indexed with hash %s", file.MetaHash)
 	for _, hash := range file.Hashes {
 		if _, ok := uploader.chunksToFile[hash]; ok {
 			common.HandleError(fmt.Errorf("collision of hashes of some indexed files"))

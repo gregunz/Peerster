@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# received 'debug' mode (boolean) as first arguement ($1)
+# received 'debug' mode (boolean) as first argument ($1) and race mode (boolean) as ($2)
 
-. ./setup_path.sh $0 $1
+. ./setup_path.sh $0 $1 $2
 
 # General peerster (gossiper) command
 #./Peerster -UIPort=12345 -gossipAddr=127.0.0.1:5001 -name=A -peers=127.0.0.1:5002 > A.out &
@@ -24,13 +24,16 @@ done
 
 ./client/client -UIPort=12349 -msg=$message_c1_1
 ./client/client -UIPort=12346 -msg=$message_c2_1
-sleep 2
 ./client/client -UIPort=12349 -msg=$message_c1_2
-sleep 1
 ./client/client -UIPort=12346 -msg=$message_c2_2
 ./client/client -UIPort=12351 -msg=$message_c3
 
-sleep 5
+sleep 10
+
+for pid in $(pgrep -f Peerster); do
+    kill $pid
+    wait $pid 2> /dev/null
+done
 
 
 #testing
@@ -40,22 +43,37 @@ echo "${BLUE}###CHECK that client messages arrived${NC}"
 
 if !(grep -q "CLIENT MESSAGE $message_c1_1" "$outPath/E.out") ; then
 	failed="T"
+	if [[ "$DEBUG" == "true" ]] ; then
+		echo "CLIENT MESSAGE $message_c1_1 MISSING in $outPath/E.out"
+	fi
 fi
 
 if !(grep -q "CLIENT MESSAGE $message_c1_2" "$outPath/E.out") ; then
 	failed="T"
+	if [[ "$DEBUG" == "true" ]] ; then
+		echo "CLIENT MESSAGE $message_c1_2 MISSING in $outPath/E.out"
+	fi
 fi
 
 if !(grep -q "CLIENT MESSAGE $message_c2_1" "$outPath/B.out") ; then
 	failed="T"
+	if [[ "$DEBUG" == "true" ]] ; then
+		echo "CLIENT MESSAGE $message_c2_1 MISSING in $outPath/B.out"
+	fi
 fi
 
 if !(grep -q "CLIENT MESSAGE $message_c2_2" "$outPath/B.out") ; then
 	failed="T"
+	if [[ "$DEBUG" == "true" ]] ; then
+		echo "CLIENT MESSAGE $message_c2_2 MISSING in $outPath/B.out"
+	fi
 fi
 
 if !(grep -q "CLIENT MESSAGE $message_c3" "$outPath/G.out") ; then
 	failed="T"
+	if [[ "$DEBUG" == "true" ]] ; then
+		echo "CLIENT MESSAGE $message_c3 MISSING in $outPath/G.out"
+	fi
 fi
 
 if [[ "$failed" == "T" ]] ; then
@@ -280,5 +298,3 @@ if [[ "$failed" == "T" ]] ; then
 else
 	echo "${GREEN}***PASSED***${NC}"
 fi
-
-pkill -f Peerster

@@ -75,9 +75,7 @@ func (handler *vectorClockHandler) ToPeerStatus() *packets_gossiper.PeerStatus {
 }
 
 func (handler *vectorClockHandler) AddToLatest(msg *packets_gossiper.RumorMessage) {
-	go func() {
-		if msg.Text != "" {
-			handler.rumorChan.AddRumor(msg)
-		}
-	}()
+	if msg.Text != "" {
+		handler.rumorChan.AddRumor(msg)
+	}
 }

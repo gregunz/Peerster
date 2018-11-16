@@ -2,6 +2,7 @@ package packets_gossiper
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/peers"
 	"strings"
 )
@@ -12,7 +13,7 @@ type StatusPacket struct {
 
 func (packet *StatusPacket) AckPrint(fromPeer *peers.Peer) {
 	ls := packet.wantString()
-	fmt.Printf("STATUS from %s %s\n",
+	logger.Printlnf("STATUS from %s %s",
 		fromPeer.Addr.ToIpPort(), strings.Join(ls, " "))
 }
 

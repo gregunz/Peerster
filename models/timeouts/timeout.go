@@ -31,11 +31,11 @@ func (timeout *Timeout) SetIfNotActive(d time.Duration, callback func()) {
 			case <-timeout.cancelChan:
 				// do nothing
 			case <-timeout.triggerChan:
-				go callback()
+				callback()
 			case <-time.After(d):
 				timeout.mux.Lock()
 				if timeout.IsActive {
-					go callback()
+					callback()
 					timeout.IsActive = false
 				}
 				timeout.mux.Unlock()

@@ -1,13 +1,16 @@
 package packets_client
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/gregunz/Peerster/logger"
+)
 
 type GetIdPacket struct{}
 
 func (packet *GetIdPacket) AckPrint() {
-	fmt.Println(packet.String())
+	logger.Printlnf(packet.String())
 }
 
-func (packet GetIdPacket) String() string {
+func (packet *GetIdPacket) String() string {
 	return fmt.Sprintf("GET ID")
 }

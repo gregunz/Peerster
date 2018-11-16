@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# expected file path of script as first argument ($1) and debug as second ($2)
+# expected file path of script as first argument ($1) and debug as second ($2) and race as third ($3)
 # it sets $projectPath and $outPath variables (+ create dir if not exist)
 # it also builds the scripts and cd to projectPath
 # it also sets some variables such as colors or ports
@@ -16,6 +16,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 DEBUG=${2:-"true"}
+RACE=${3:-"false"}
 
 outputFiles=()
 
@@ -35,7 +36,11 @@ message_c3=Is_anybody_here?
 private_msg="hello, this is a private message :P"
 
 cd "$projectPath"
-go build
+if [[ "$RACE" == "true" ]] ; then
+    go build -race
+else
+    go build
+fi
 cd client
 go build
 cd "$projectPath"

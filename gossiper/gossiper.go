@@ -25,6 +25,7 @@ const (
 	udpPacketMaxSize    = 65536
 	hopLimit            = 10
 	debug               = false
+	//bufferedChanSize    = 1000 * 1000 // not sure if useful
 )
 
 type Gossiper struct {
@@ -52,16 +53,14 @@ type Gossiper struct {
 	IndexedFilesChan    files.FileChan
 	FilesDownloader     files.Downloader
 	DownloadedFilesChan files.FileChan
-
-	mux sync.Mutex
 }
 
 func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.Set,
-	rTimerDuration uint) *Gossiper {
+	rTimerDuration uint, guiEnabled bool) *Gossiper {
 
-	logger.Printlnf("Gossiper created: named <%s> listening peers on ip:port <%s> "+
-		"and listening local clients on port <%d> with peers <%s>",
-		name, address.ToIpPort(), uiPort, peersSet.ToString("> <"))
+	logger.Printlnf("Gossiper named <%s> listening peers on ip:port <%s> "+
+		"and listening local clients on port <%d> with peers <(%s)>",
+		name, address.ToIpPort(), uiPort, peersSet.ToString("), ("))
 
 	mode := NewDefaultMode()
 	if simple {
@@ -72,12 +71,17 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 	_, peerConn := utils.ConnectToIpPort(address.ToIpPort())
 	_, clientConn := utils.ConnectToIpPort(clientAddr.ToIpPort())
 
-	updatesChannels := updates.NewChannels()
+	if name == "" || peerConn == nil || clientConn == nil {
+		logger.Printlnf("could not create gossiper with those arguments")
+		return nil
+	}
+
+	updatesChannels := updates.NewChannels(guiEnabled)
 	routingTable := routing.NewTable(name, updatesChannels)
 	vectorClock := vector_clock.NewVectorClock(updatesChannels)
 	conversations := conv.NewConversations(updatesChannels)
-	uploader := files.NewFilesUploader()
-	downloader := files.NewFilesDownloader()
+	uploader := files.NewFilesUploader(guiEnabled)
+	downloader := files.NewFilesDownloader(guiEnabled)
 	peersSet.SetNodeChan(updatesChannels)
 
 	return &Gossiper{
@@ -91,8 +95,8 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		Origin:              name,
 		GossipAddr:          address,
 		GUIPort:             guiPort,
-		FromClientChan:      make(chan *packets_client.ClientPacket),
-		FromGossipChan:      make(chan *GossipChannelElement),
+		FromClientChan:      make(chan *packets_client.ClientPacket), // bufferedChanSize),
+		FromGossipChan:      make(chan *GossipChannelElement),        // bufferedChanSize),
 		NodeChan:            updatesChannels,
 		RumorChan:           updatesChannels,
 		PrivateMsgChan:      updatesChannels,
@@ -145,7 +149,7 @@ func (g *Gossiper) listenClient(group *sync.WaitGroup) {
 			return
 		}
 		if g.debug {
-			fmt.Printf("<< receiving on client <%s> from <%s>\n", packet.String(), fromIpPort)
+			logger.Printlnf("<< receiving on client <%s> from <%s>", packet.String(), fromIpPort)
 		}
 		g.FromClientChan <- &packet
 	})
@@ -163,7 +167,7 @@ func (g *Gossiper) listenGossip(group *sync.WaitGroup) {
 			return
 		}
 		if g.debug {
-			fmt.Printf("<< receiving on gossiper <%s> from <%s>\n", packet.String(), fromIpPort)
+			logger.Printlnf("<< receiving on gossiper <%s> from <%s>", packet.String(), fromIpPort)
 		}
 		g.FromGossipChan <- &GossipChannelElement{
 			Packet: &packet,
@@ -193,14 +197,14 @@ func (g *Gossiper) antiEntropy(group *sync.WaitGroup) {
 	ticker := time.NewTicker(antiEntropyDuration)
 	for range ticker.C {
 		if randomPeer := g.PeersSet.GetRandom(); randomPeer != nil {
-			go g.sendPacket(g.VectorClock.ToStatusPacket(), g.PeersSet.GetRandom())
+			g.sendPacket(g.VectorClock.ToStatusPacket(), g.PeersSet.GetRandom())
 		}
 	}
 }
 
 func (g *Gossiper) broadcastRoutePacket() {
 	routePacket := g.VectorClock.GetOrCreateHandler(g.Origin).CreateAndSaveNextMessage("")
-	go g.sendPacket(routePacket, g.PeersSet.GetSlice()...)
+	g.sendPacket(routePacket, g.PeersSet.GetSlice()...)
 }
 
 func (g *Gossiper) routeRumorTicker(group *sync.WaitGroup) {
@@ -238,7 +242,7 @@ func (g *Gossiper) handleClientSimpleMode(packet *packets_client.ClientPacket) {
 		RelayPeerAddr: g.GossipAddr.ToIpPort(),
 		OriginalName:  g.Origin,
 	}
-	go g.sendPacket(msg, g.PeersSet.GetSlice()...)
+	g.sendPacket(msg, g.PeersSet.GetSlice()...)
 }
 
 func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
@@ -246,7 +250,7 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 		meHandler := g.VectorClock.GetOrCreateHandler(g.Origin)
 		rumorMessage := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message)
 		if randomPeer := g.PeersSet.GetRandom(); randomPeer != nil {
-			go g.sendPacket(rumorMessage, randomPeer)
+			g.sendPacket(rumorMessage, randomPeer)
 		}
 	} else if packet.IsPostMessage() && packet.PostMessage.Destination != "" {
 		meHandler := g.Conversations.GetOrCreateHandler(g.Origin)
@@ -305,7 +309,7 @@ func (g *Gossiper) handleSimple(msg *packets_gossiper.SimpleMessage, fromPeer *p
 	}
 	toPeers := g.PeersSet.Filter(fromPeer).GetSlice() // not resending to sender
 
-	go g.sendPacket(msgToSend, toPeers...)
+	g.sendPacket(msgToSend, toPeers...)
 }
 
 func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
@@ -322,26 +326,26 @@ func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *pee
 
 	// sendPacket to a random peer
 	if randomPeer := g.PeersSet.GetRandom(fromPeer); randomPeer != nil {
-		go g.sendPacket(msgToSend, randomPeer)
+		g.sendPacket(msgToSend, randomPeer)
 	}
 
 	// send back status packet to sender (= ack of the rumor)
-	go g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer)
+	g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer)
 }
 
 func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer *peers.Peer) {
 	rumorMsg, remoteHasMsg := g.VectorClock.Compare(packet.ToMap())
 
 	if rumorMsg != nil { // has a msg to send
-		go g.sendPacket(rumorMsg, fromPeer) // send the new message
+		g.sendPacket(rumorMsg, fromPeer) // send the new message
 	}
 	if remoteHasMsg { // remote has new message
-		go g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer) // send status to remote
+		g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer) // send status to remote
 	}
 	if rumorMsg == nil && !remoteHasMsg { // is up to date
 		fromPeer.FlipTimeout.Trigger()
 		if !g.debug {
-			fmt.Printf("IN SYNC WITH %s\n", fromPeer.Addr.ToIpPort())
+			logger.Printlnf("IN SYNC WITH %s", fromPeer.Addr.ToIpPort())
 		}
 	} else {
 		fromPeer.FlipTimeout.Cancel()
@@ -355,7 +359,7 @@ func (g *Gossiper) transmit(packetToTransmit packets_gossiper.Transmittable, dec
 	if packetToTransmit.IsTransmittable() && packetToTransmit.Dest() != g.Origin {
 		toPeer := g.RoutingTable.GetOrCreateHandler(packetToTransmit.Dest()).GetPeer()
 		if toPeer != nil {
-			go g.sendPacket(packetToTransmit, toPeer)
+			g.sendPacket(packetToTransmit, toPeer)
 		}
 	}
 }
@@ -392,9 +396,9 @@ func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
 	} else { // packet is for us
 		awaitingHashes, filename, index := g.FilesDownloader.AddChunkOrMetafile(utils.HashToHex(packet.HashValue), packet.Data)
 		if index == 0 { // metafile
-			fmt.Printf("DOWNLOADING metafile of %s from %s\n", filename, packet.Origin)
+			logger.Printlnf("DOWNLOADING metafile of %s from %s", filename, packet.Origin)
 		} else if index > 0 { // chunk
-			fmt.Printf("DOWNLOADING %s chunk %d from %s\n", filename, index, packet.Origin)
+			logger.Printlnf("DOWNLOADING %s chunk %d from %s", filename, index, packet.Origin)
 		}
 		for _, hashString := range awaitingHashes {
 			packetToSend := &packets_gossiper.DataRequest{
@@ -431,7 +435,7 @@ func (g *Gossiper) sendPacket(packet packets_gossiper.GossipPacketI, to ...*peer
 			if p != nil && !p.Addr.Equals(g.GossipAddr) {
 				g.handleSendPacket(packet, p)
 				if g.debug {
-					fmt.Printf(">> sending <%s> to <%s>\n", packet.ToGossipPacket().String(), p.Addr.ToIpPort())
+					logger.Printlnf(">> sending <%s> to <%s>", packet.ToGossipPacket().String(), p.Addr.ToIpPort())
 				}
 				_, err := g.gossiperConn.WriteToUDP(packetBytes, p.Addr.UDP())
 				if err != nil {
@@ -453,7 +457,7 @@ func (g *Gossiper) handleSendPacket(packet packets_gossiper.GossipPacketI, toPee
 		toPeer.FlipTimeout.SetIfNotActive(timeoutDuration, func() {
 			if flipped := utils.FlipCoin(); flipped {
 				if randomPeer := g.PeersSet.GetRandom(toPeer); randomPeer != nil {
-					go g.sendPacket(packet, randomPeer)
+					g.sendPacket(packet, randomPeer)
 					packetToSend.Rumor.SendPrintFlipped(randomPeer)
 				}
 			}

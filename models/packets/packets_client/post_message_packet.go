@@ -1,6 +1,9 @@
 package packets_client
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/gregunz/Peerster/logger"
+)
 
 type PostMessagePacket struct {
 	Message     string `json:"message"`
@@ -8,10 +11,10 @@ type PostMessagePacket struct {
 }
 
 func (packet *PostMessagePacket) AckPrint() {
-	fmt.Printf("CLIENT MESSAGE %s\n", packet.Message)
+	logger.Printlnf("CLIENT MESSAGE %s", packet.Message)
 }
 
-func (packet PostMessagePacket) String() string {
+func (packet *PostMessagePacket) String() string {
 	toStr := ""
 	if packet.Destination != "" {
 		toStr = fmt.Sprintf("to %s", packet.Destination)

@@ -3,6 +3,7 @@ package routing
 import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 	"sync"
@@ -30,7 +31,7 @@ func (handler *tableHandler) AckRumor(rumor *packets_gossiper.RumorMessage, from
 	if rumor.Origin == handler.origin && rumor.ID > handler.latestID {
 		handler.latestID = rumor.ID
 		handler.peer = fromPeer
-		fmt.Printf("DSDV %s %s\n", handler.origin, handler.peer.Addr.ToIpPort())
+		logger.Printlnf("DSDV %s %s", handler.origin, handler.peer.Addr.ToIpPort())
 	}
 }
 

@@ -8,12 +8,13 @@ declare -a scripts=(
 )
 
 DEBUG=${1:-"false"}
+RACE=${2:-"false"}
 
 ## now loop through the above array
 for s in "${scripts[@]}"
 do
-	if [[ "$DEBUG" == "true" ]] ; then
-    echo $s
-  fi
-  sh $s $DEBUG
+    if [[ "$DEBUG" == "true" ]] ; then
+        echo $s
+    fi
+    sh $s $DEBUG $RACE
 done

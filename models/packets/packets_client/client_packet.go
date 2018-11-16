@@ -2,19 +2,23 @@ package packets_client
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/www/subscription"
 	"strings"
 )
 
 type ClientPacket struct {
-	GetId            *GetIdPacket            `json:"get-id"`
-	PostMessage      *PostMessagePacket      `json:"post-message"`
-	PostNode         *PostNodePacket         `json:"post-node"`
-	SubscribeMessage *SubscribeMessagePacket `json:"subscribe-message"`
-	SubscribeNode    *SubscribeNodePacket    `json:"subscribe-node"`
-	SubscribeOrigin  *SubscribeOriginPacket  `json:"subscribe-origin"`
-	IndexFile        *IndexFilePacket        `json:"index-file"`
-	RequestFile      *RequestFilePacket      `json:"request-file"`
-	SubscribeFile    *SubscribeFilePacket    `json:"subscribe-file"`
+	GetId *GetIdPacket `json:"get-id"`
+
+	PostMessage *PostMessagePacket `json:"post-message"`
+	PostNode    *PostNodePacket    `json:"post-node"`
+
+	IndexFile   *IndexFilePacket   `json:"index-file"`
+	RequestFile *RequestFilePacket `json:"request-file"`
+
+	SubscribeMessage *SubscribePacket `json:"subscribe-message"`
+	SubscribeNode    *SubscribePacket `json:"subscribe-node"`
+	SubscribeOrigin  *SubscribePacket `json:"subscribe-origin"`
+	SubscribeFile    *SubscribePacket `json:"subscribe-file"`
 }
 
 func (packet *ClientPacket) IsGetId() bool {
@@ -58,29 +62,32 @@ func (packet *ClientPacket) AckPrint() {
 	if packet.IsGetId() {
 		packet.GetId.AckPrint()
 	}
+
 	if packet.IsPostMessage() {
 		packet.PostMessage.AckPrint()
 	}
 	if packet.IsPostNode() {
 		packet.PostNode.AckPrint()
 	}
-	if packet.IsSubscribeMessage() {
-		packet.SubscribeMessage.AckPrint()
-	}
-	if packet.IsSubscribeNode() {
-		packet.SubscribeNode.AckPrint()
-	}
-	if packet.IsSubscribeOrigin() {
-		packet.SubscribeOrigin.AckPrint()
-	}
+
 	if packet.IsRequestFile() {
 		packet.RequestFile.AckPrint()
 	}
 	if packet.IsIndexFile() {
 		packet.IndexFile.AckPrint()
 	}
+
+	if packet.IsSubscribeMessage() {
+		packet.SubscribeMessage.AckPrint(subscription.Message)
+	}
+	if packet.IsSubscribeNode() {
+		packet.SubscribeNode.AckPrint(subscription.Node)
+	}
+	if packet.IsSubscribeOrigin() {
+		packet.SubscribeOrigin.AckPrint(subscription.Origin)
+	}
 	if packet.IsSubscribeFile() {
-		packet.SubscribeFile.AckPrint()
+		packet.SubscribeFile.AckPrint(subscription.File)
 	}
 }
 
@@ -130,23 +137,23 @@ func (packet ClientPacket) String() string {
 	if packet.IsPostNode() {
 		ls = append(ls, packet.PostNode.String())
 	}
-	if packet.IsSubscribeMessage() {
-		ls = append(ls, packet.SubscribeMessage.String())
-	}
-	if packet.IsSubscribeNode() {
-		ls = append(ls, packet.SubscribeNode.String())
-	}
-	if packet.IsSubscribeOrigin() {
-		ls = append(ls, packet.SubscribeOrigin.String())
-	}
 	if packet.IsIndexFile() {
 		ls = append(ls, packet.IndexFile.String())
 	}
 	if packet.IsRequestFile() {
 		ls = append(ls, packet.RequestFile.String())
 	}
+	if packet.IsSubscribeMessage() {
+		ls = append(ls, packet.SubscribeMessage.String(subscription.Message))
+	}
+	if packet.IsSubscribeNode() {
+		ls = append(ls, packet.SubscribeNode.String(subscription.Node))
+	}
+	if packet.IsSubscribeOrigin() {
+		ls = append(ls, packet.SubscribeOrigin.String(subscription.Origin))
+	}
 	if packet.IsSubscribeFile() {
-		ls = append(ls, packet.SubscribeFile.String())
+		ls = append(ls, packet.SubscribeFile.String(subscription.File))
 	}
 	if len(ls) == 0 {
 		return "<empty>"

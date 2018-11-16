@@ -1,6 +1,9 @@
 package packets_gossiper
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/gregunz/Peerster/logger"
+)
 
 type SimpleMessage struct {
 	OriginalName  string `json:"original-name"`
@@ -9,7 +12,7 @@ type SimpleMessage struct {
 }
 
 func (msg *SimpleMessage) AckPrint() {
-	fmt.Println(msg.String())
+	logger.Printlnf(msg.String())
 }
 
 func (msg *SimpleMessage) ToGossipPacket() *GossipPacket {
@@ -18,7 +21,7 @@ func (msg *SimpleMessage) ToGossipPacket() *GossipPacket {
 	}
 }
 
-func (msg SimpleMessage) String() string {
+func (msg *SimpleMessage) String() string {
 	return fmt.Sprintf("SIMPLE MESSAGE origin %s from %s contents %s",
 		msg.OriginalName, msg.RelayPeerAddr, msg.Contents)
 }

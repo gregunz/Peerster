@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# received 'debug' mode (boolean) as first arguement ($1)
+# received 'debug' mode (boolean) as first argument ($1) and race mode (boolean) as ($2)
 
-. ./setup_path.sh $0 $1
+. ./setup_path.sh $0 $1 $2
 
 # General peerster (gossiper) command
 #./Peerster -UIPort=12345 -gossipAddr=127.0.0.1:5001 -name=A -peers=127.0.0.1:5002 > A.out &
@@ -27,7 +27,10 @@ sleep 4
 ./client/client -UIPort=12345 -msg="$private_msg" -dest=F
 
 sleep 2
-#pkill -f Peerster
+for pid in $(pgrep -f Peerster); do
+    kill $pid
+    wait $pid 2> /dev/null
+done
 
 
 #testing
@@ -57,7 +60,5 @@ if [[ "$failed" == "T" ]] ; then
 	echo "${RED}***FAILED***${NC}"
 else
 	echo "${GREEN}***PASSED***${NC}"
-#	rm *.out
 fi
 
-pkill -f Peerster

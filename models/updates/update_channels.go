@@ -14,14 +14,14 @@ type UpdateChannels struct {
 	activated  bool
 }
 
-func NewChannels() *UpdateChannels {
+func NewChannels(activated bool) *UpdateChannels {
 	return &UpdateChannels{
 		rumorMsg:   make(chan *packets_gossiper.RumorMessage),
 		node:       make(chan *peers.Peer),
 		privateMsg: make(chan *packets_gossiper.PrivateMessage),
 		origin:     make(chan string),
 		file:       make(chan string),
-		activated:  true,
+		activated:  activated,
 	}
 }
 

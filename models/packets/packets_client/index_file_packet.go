@@ -1,17 +1,20 @@
 package packets_client
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/gregunz/Peerster/logger"
+)
 
 type IndexFilePacket struct {
 	Filename string `json:"filename"`
 }
 
-func (packet IndexFilePacket) String() string {
+func (packet *IndexFilePacket) String() string {
 	return fmt.Sprintf("INDEX FILE %s", packet.Filename)
 }
 
 func (packet *IndexFilePacket) AckPrint() {
-	fmt.Println(packet.String())
+	logger.Printlnf(packet.String())
 }
 
 func (packet *IndexFilePacket) ToClientPacket() *ClientPacket {

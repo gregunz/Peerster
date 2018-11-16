@@ -3,6 +3,7 @@ package peers
 import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"math/rand"
 	"strings"
 	"sync"
@@ -35,7 +36,7 @@ func (set *Set) string() string {
 	return fmt.Sprintf("PEERS %s", set.toString(","))
 }
 
-func (set Set) String() string {
+func (set *Set) String() string {
 	set.mux.Lock()
 	defer set.mux.Unlock()
 
@@ -57,11 +58,11 @@ func (set *Set) ToStrings() []string {
 	return set.toStrings()
 }
 
-func (set Set) toString(sep string) string {
+func (set *Set) toString(sep string) string {
 	return strings.Join(set.toStrings(), sep)
 }
 
-func (set Set) ToString(sep string) string {
+func (set *Set) ToString(sep string) string {
 	set.mux.Lock()
 	defer set.mux.Unlock()
 
@@ -160,7 +161,7 @@ func (set *Set) AckPrint() {
 	defer set.mux.Unlock()
 
 	if set.nonEmpty() {
-		fmt.Println(set.string())
+		logger.Printlnf(set.string())
 	}
 }
 

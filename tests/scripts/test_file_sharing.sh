@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# received 'debug' mode (boolean) as first arguement ($1)
+# received 'debug' mode (boolean) as first argument ($1) and race mode (boolean) as ($2)
 
-. ./setup_path.sh $0 $1
+. ./setup_path.sh $0 $1 $2
 
 
 if [[ "$DEBUG" == "true" ]] ; then
@@ -35,9 +35,12 @@ sleep 4
 ./client/client -UIPort=12350 -file=hamlet_F.txt -dest=A -request=d0fdefd8f0e7d259b36b237cc967f06320353700e15354048634a6cd8bda4e59
 
 sleep 15
+for pid in $(pgrep -f Peerster); do
+    kill $pid
+    wait $pid 2> /dev/null
+done
 
-#pkill -f Peerster > /dev/null
-
+# testing phase
 echo "${BLUE}###CHECK hamlet file transfered${NC}"
 
 diff_res=$(diff _SharedFiles/hamlet.txt _Downloads/hamlet_F.txt)
@@ -54,5 +57,3 @@ else
 #    rm _Downloads/hamlet_F.txt
 #    rm _Downloads/.meta/hamlet_F.txt
 fi
-
-pkill -f Peerster

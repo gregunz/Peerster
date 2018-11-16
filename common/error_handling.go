@@ -15,5 +15,5 @@ func HandleAbort(msg string, e error) {
 	if e != nil {
 		errorString = fmt.Sprintf(":\n\t->ERROR: %s", e)
 	}
-	logger.Printlnf("ABORT: %s%s\n", msg, errorString)
+	logger.Printlnf("ABORT: %s%s", msg, errorString)
 }

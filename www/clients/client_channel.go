@@ -1,4 +1,4 @@
-package www
+package clients
 
 import (
 	"github.com/gregunz/Peerster/models/packets/packets_client"

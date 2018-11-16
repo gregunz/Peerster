@@ -2,6 +2,7 @@ package packets_gossiper
 
 import (
 	"fmt"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/peers"
 )
 
@@ -12,16 +13,16 @@ type RumorMessage struct {
 }
 
 func (msg *RumorMessage) AckPrint(fromPeer *peers.Peer) {
-	fmt.Printf("RUMOR origin %s from %s ID %d contents %s\n",
+	logger.Printlnf("RUMOR origin %s from %s ID %d contents %s",
 		msg.Origin, fromPeer.Addr.ToIpPort(), msg.ID, msg.Text)
 }
 
 func (msg *RumorMessage) SendPrintMongering(toPeer *peers.Peer) {
-	fmt.Printf("MONGERING with %s\n", toPeer.Addr.ToIpPort())
+	logger.Printlnf("MONGERING with %s", toPeer.Addr.ToIpPort())
 }
 
 func (msg *RumorMessage) SendPrintFlipped(toPeer *peers.Peer) {
-	fmt.Printf("FLIPPED COIN sending rumor to %s\n", toPeer.Addr.ToIpPort())
+	logger.Printlnf("FLIPPED COIN sending rumor to %s", toPeer.Addr.ToIpPort())
 }
 
 func (msg *RumorMessage) ToGossipPacket() *GossipPacket {

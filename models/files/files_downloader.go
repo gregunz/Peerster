@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/timeouts"
 	"github.com/gregunz/Peerster/utils"
 	"os"
@@ -40,12 +41,12 @@ type Downloader interface {
 	SetTimeout(hash string, callback func())
 }
 
-func NewFilesDownloader() *downloader {
+func NewFilesDownloader(activateChan bool) *downloader {
 	return &downloader{
 		awaitingMetafiles:             map[string]*awaitingMetafile{},
 		downloadedMetafilesToFilename: map[string]string{},
 		awaitingChunks:                map[string]*awaitingChunk{},
-		FileChan:                      NewFileChan(true),
+		FileChan:                      NewFileChan(activateChan),
 	}
 }
 
@@ -120,7 +121,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 		if builder.IsComplete() {
 			file := builder.Build()
 			if file != nil {
-				fmt.Printf("RECONSTRUCTED file %s\n", file.Name)
+				logger.Printlnf("RECONSTRUCTED file %s", file.Name)
 				downloader.FileChan.Push(file)
 			} else {
 				common.HandleError(fmt.Errorf("build of file failed"))

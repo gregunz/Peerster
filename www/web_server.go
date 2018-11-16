@@ -12,17 +12,20 @@ import (
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/packets/responses_client"
+	"github.com/gregunz/Peerster/www/clients"
+	"github.com/gregunz/Peerster/www/subscription"
 	"github.com/microcosm-cc/bluemonday"
 	"net/http"
+	"sync"
 )
 
 type WebServer struct {
 	gossiper        *gossiper.Gossiper
-	clientChan      chan *ClientChannelElement
+	clientChan      chan *clients.ClientChannelElement
 	allRumors       []*packets_gossiper.RumorMessage
 	allPrivate      []*packets_gossiper.PrivateMessage
 	downloadedFiles []*files.FileType
-	clients         map[Writer]*client
+	clients         clients.Map
 	policy          *bluemonday.Policy
 }
 
@@ -44,13 +47,13 @@ func NewWebServer(g *gossiper.Gossiper) *WebServer {
 
 	return &WebServer{
 		gossiper:   g,
-		clientChan: make(chan *ClientChannelElement, 1),
-		clients:    map[Writer]*client{},
+		clientChan: make(chan *clients.ClientChannelElement, 1),
+		clients:    clients.NewList(),
 		policy:     p,
 	}
 }
 
-func (server *WebServer) Start() {
+func (server *WebServer) Start(group sync.WaitGroup) {
 
 	router := mux.NewRouter()
 
@@ -63,13 +66,26 @@ func (server *WebServer) Start() {
 	// Create a simple file server
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./gui")))
 
-	go server.handleClientPacket()
-	go server.handleRumorSubscriptions()
-	go server.handlePrivateSubscriptions()
-	go server.handleNodeSubscriptions()
-	go server.handleOriginsSubscriptions()
-	go server.handleIndexedFilesSubscriptions()
-	go server.handleDownloadedFilesSubscriptions()
+	group.Add(1)
+	go server.handleClientPacket(group)
+
+	group.Add(1)
+	go server.handleRumorSubscriptions(group)
+
+	group.Add(1)
+	go server.handlePrivateSubscriptions(group)
+
+	group.Add(1)
+	go server.handleNodeSubscriptions(group)
+
+	group.Add(1)
+	go server.handleOriginsSubscriptions(group)
+
+	group.Add(1)
+	go server.handleIndexedFilesSubscriptions(group)
+
+	group.Add(1)
+	go server.handleDownloadedFilesSubscriptions(group)
 
 	// Start the server on localhost port 8000 and log any errors
 	port := fmt.Sprintf(":%d", server.gossiper.GUIPort)
@@ -80,7 +96,7 @@ func (server *WebServer) Start() {
 	}
 }
 
-func (server *WebServer) handleClientPacket() {
+func (server *WebServer) handleClientPacket(group sync.WaitGroup) {
 	for {
 		elem, ok := <-server.clientChan
 		if ok {
@@ -91,92 +107,111 @@ func (server *WebServer) handleClientPacket() {
 			go server.handlePacket(elem.Packet, elem.Writer, false)
 		}
 	}
+	group.Done()
 }
 
-func (server *WebServer) handleRumorSubscriptions() {
+func (server *WebServer) handleRumorSubscriptions(group sync.WaitGroup) {
 	for {
 		msg := server.gossiper.RumorChan.GetRumor()
 		if msg != nil {
 			server.allRumors = append(server.allRumors, msg)
-			for w, c := range server.clients {
-				if c.IsSubscribedToMessage {
+			server.clients.Iterate(func(w clients.Writer, c clients.Client) {
+				if c.IsSubscribedTo(subscription.Message) {
 					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(msg, server.policy)))
 				}
-			}
+			})
 		}
 	}
+	group.Done()
 }
 
-func (server *WebServer) handlePrivateSubscriptions() {
+func (server *WebServer) handlePrivateSubscriptions(group sync.WaitGroup) {
 	for {
 		msg := server.gossiper.PrivateMsgChan.GetPrivateMsg()
 		if msg != nil {
-			for w, c := range server.clients {
-				if c.IsSubscribedToMessage {
+			server.clients.Iterate(func(w clients.Writer, c clients.Client) {
+				if c.IsSubscribedTo(subscription.Message) {
 					common.HandleError(w.WriteJSON(responses_client.NewPrivateResponse(msg, server.policy)))
 				}
-			}
+			})
 		}
 	}
+	group.Done()
 }
 
-func (server *WebServer) handleNodeSubscriptions() {
+func (server *WebServer) handleNodeSubscriptions(group sync.WaitGroup) {
 	for {
 		peer := server.gossiper.NodeChan.GetNode()
 		if peer != nil {
-			for w, c := range server.clients {
-				if c.IsSubscribedToNode {
+			server.clients.Iterate(func(w clients.Writer, c clients.Client) {
+				if c.IsSubscribedTo(subscription.Node) {
 					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer, server.policy)))
 				}
-			}
+			})
 		}
 	}
+	group.Done()
 }
 
-func (server *WebServer) handleOriginsSubscriptions() {
+func (server *WebServer) handleOriginsSubscriptions(group sync.WaitGroup) {
 	for {
 		o := server.gossiper.OriginChan.GetOrigin()
 		if o != "" && o != server.gossiper.Origin {
-			for w, c := range server.clients {
-				if c.IsSubscribedToOrigin {
+			server.clients.Iterate(func(w clients.Writer, c clients.Client) {
+				if c.IsSubscribedTo(subscription.Origin) {
 					common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
 				}
-			}
+			})
 		}
 	}
+	group.Done()
 }
 
-func (server *WebServer) handleIndexedFilesSubscriptions() {
+func (server *WebServer) handleIndexedFilesSubscriptions(group sync.WaitGroup) {
 	for {
 		file := server.gossiper.IndexedFilesChan.Get()
 		if file != nil {
-			for w, c := range server.clients {
-				if c.IsSubscribedToFiles {
+			server.clients.Iterate(func(w clients.Writer, c clients.Client) {
+				if c.IsSubscribedTo(subscription.File) {
 					common.HandleError(w.WriteJSON(responses_client.NewIndexedFileResponse(file, server.policy)))
 				}
-			}
+			})
 		}
 	}
+	group.Done()
 }
-func (server *WebServer) handleDownloadedFilesSubscriptions() {
+func (server *WebServer) handleDownloadedFilesSubscriptions(group sync.WaitGroup) {
 	for {
 		file := server.gossiper.DownloadedFilesChan.Get()
 		if file != nil {
 			server.downloadedFiles = append(server.downloadedFiles, file)
-			for w, c := range server.clients {
-				if c.IsSubscribedToFiles {
+			server.clients.Iterate(func(w clients.Writer, c clients.Client) {
+				if c.IsSubscribedTo(subscription.File) {
 					common.HandleError(w.WriteJSON(responses_client.NewDownloadedFileResponse(file, server.policy)))
 				}
-			}
+			})
 		}
 	}
+	group.Done()
 }
 
-func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Writer, isRest bool) {
+func (server *WebServer) handleSubscriptionPacket(packet *packets_client.SubscribePacket, client clients.Client, sub subscription.Sub) bool {
+	if !client.IsSubscribedTo(sub) && packet.Subscribe {
+		client.SetSubscriptionTo(sub, true)
+		if packet.WithPrevious {
+			return true
+		}
+	} else if client.IsSubscribedTo(sub) && !packet.Subscribe {
+		client.SetSubscriptionTo(sub, false)
+	}
+	return false
+}
 
-	fmt.Printf("[GUI] received packet <%s>\n", packet.String())
+func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w clients.Writer, isRest bool) {
 
-	client := server.clients[w]
+	logger.Printlnf("[GUI] received packet <%s>", packet.String())
+
+	client := server.clients.Get(w) // we know the client was added
 
 	if packet.IsGetId() {
 		common.HandleError(w.WriteJSON(responses_client.NewGetIdResponse(server.gossiper.Origin, server.policy)))
@@ -203,51 +238,6 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		}
 		return
 	}
-	if packet.IsSubscribeMessage() {
-		if !client.IsSubscribedToMessage && packet.SubscribeMessage.Subscribe {
-			client.IsSubscribedToMessage = true
-			if packet.SubscribeMessage.WithPrevious {
-				for _, rumor := range server.allRumors {
-					common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor, server.policy)))
-				}
-				for _, msg := range server.gossiper.Conversations.GetAll() {
-					common.HandleError(w.WriteJSON(responses_client.NewPrivateResponse(msg, server.policy)))
-				}
-			}
-		} else if client.IsSubscribedToMessage && !packet.SubscribeMessage.Subscribe {
-			client.IsSubscribedToMessage = false
-		}
-		return
-	}
-	if packet.IsSubscribeNode() {
-		if !client.IsSubscribedToNode && packet.SubscribeNode.Subscribe {
-			client.IsSubscribedToNode = true
-			if packet.SubscribeNode.WithPrevious {
-				for _, peer := range server.gossiper.PeersSet.GetSlice() {
-					common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer, server.policy)))
-				}
-			}
-		} else if client.IsSubscribedToNode && !packet.SubscribeNode.Subscribe {
-			client.IsSubscribedToNode = false
-		}
-		return
-	}
-
-	if packet.IsSubscribeOrigin() {
-		if !client.IsSubscribedToOrigin && packet.SubscribeOrigin.Subscribe {
-			client.IsSubscribedToOrigin = true
-			if packet.SubscribeOrigin.WithPrevious {
-				for _, o := range server.gossiper.RoutingTable.GetOrigins() {
-					if o != server.gossiper.Origin {
-						common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
-					}
-				}
-			}
-		} else if client.IsSubscribedToOrigin && !packet.SubscribeOrigin.Subscribe {
-			client.IsSubscribedToOrigin = false
-		}
-		return
-	}
 
 	if packet.IsIndexFile() {
 		go func() { server.gossiper.FromClientChan <- packet.IndexFile.ToClientPacket() }()
@@ -265,21 +255,46 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w Wri
 		return
 	}
 
-	if packet.IsSubscribeFile() {
-		if !client.IsSubscribedToFiles && packet.SubscribeFile.Subscribe {
-			client.IsSubscribedToFiles = true
-			if packet.SubscribeFile.WithPrevious {
-				for _, file := range server.gossiper.FilesUploader.GetAllFiles() {
-					common.HandleError(w.WriteJSON(responses_client.NewIndexedFileResponse(file, server.policy)))
-				}
-				for _, filename := range server.downloadedFiles {
-					common.HandleError(w.WriteJSON(responses_client.NewDownloadedFileResponse(filename, server.policy)))
-				}
+	if packet.IsSubscribeMessage() && !isRest {
+		if server.handleSubscriptionPacket(packet.SubscribeMessage, client, subscription.Message) {
+			for _, rumor := range server.allRumors {
+				common.HandleError(w.WriteJSON(responses_client.NewRumorResponse(rumor, server.policy)))
 			}
-		} else if client.IsSubscribedToFiles && !packet.SubscribeFile.Subscribe {
-			client.IsSubscribedToFiles = false
+			for _, msg := range server.gossiper.Conversations.GetAll() {
+				common.HandleError(w.WriteJSON(responses_client.NewPrivateResponse(msg, server.policy)))
+			}
 		}
 		return
+	}
+	if packet.IsSubscribeNode() && !isRest {
+		if server.handleSubscriptionPacket(packet.SubscribeNode, client, subscription.Node) {
+			for _, peer := range server.gossiper.PeersSet.GetSlice() {
+				common.HandleError(w.WriteJSON(responses_client.NewPeerResponse(peer, server.policy)))
+			}
+		}
+		return
+	}
+
+	if packet.IsSubscribeOrigin() && !isRest {
+		if server.handleSubscriptionPacket(packet.SubscribeOrigin, client, subscription.Origin) {
+			for _, o := range server.gossiper.RoutingTable.GetOrigins() {
+				if o != server.gossiper.Origin {
+					common.HandleError(w.WriteJSON(responses_client.NewContactResponse(o, server.policy)))
+				}
+			}
+		}
+		return
+	}
+
+	if packet.IsSubscribeFile() && !isRest {
+		if server.handleSubscriptionPacket(packet.SubscribeFile, client, subscription.File) {
+			for _, file := range server.gossiper.FilesUploader.GetAllFiles() {
+				common.HandleError(w.WriteJSON(responses_client.NewIndexedFileResponse(file, server.policy)))
+			}
+			for _, filename := range server.downloadedFiles {
+				common.HandleError(w.WriteJSON(responses_client.NewDownloadedFileResponse(filename, server.policy)))
+			}
+		}
 	}
 
 	common.HandleAbort("an unexpected event occurred while handling ClientPacket", nil)
@@ -294,17 +309,16 @@ func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.R
 	}
 
 	w := websocketToWriter(ws)
-	c, ok := server.clients[w]
+	c := server.clients.Get(w)
 
 	// Make sure we close the connection when the function returns
 	defer func() {
 		ws.Close()
-		delete(server.clients, w)
+		server.clients.Remove(w)
 	}()
 
-	if !ok {
-		c = NewClient()
-		server.clients[w] = c
+	if c == nil {
+		server.clients.Add(w)
 		logger.Printlnf("<web-server> new client just arrived")
 	}
 
@@ -322,7 +336,7 @@ func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.R
 			}
 		}
 		// Send the newly received message to the broadcast channel
-		server.clientChan <- &ClientChannelElement{
+		server.clientChan <- &clients.ClientChannelElement{
 			Packet: &packet,
 			Writer: w,
 		}
@@ -330,21 +344,17 @@ func (server *WebServer) handleConnections(writer http.ResponseWriter, r *http.R
 
 }
 
-func restToWriter(w http.ResponseWriter) Writer {
-	return &ProtoWriter{
-		writeJSON: func(v *responses_client.ClientResponse) error {
-			w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-			return json.NewEncoder(w).Encode(v)
-		},
-	}
+func restToWriter(w http.ResponseWriter) clients.Writer {
+	return clients.NewWriter(func(v *responses_client.ClientResponse) error {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		return json.NewEncoder(w).Encode(v)
+	})
 }
 
-func websocketToWriter(ws *websocket.Conn) Writer {
-	return &ProtoWriter{
-		writeJSON: func(v *responses_client.ClientResponse) error {
-			return ws.WriteJSON(v)
-		},
-	}
+func websocketToWriter(ws *websocket.Conn) clients.Writer {
+	return clients.NewWriter(func(v *responses_client.ClientResponse) error {
+		return ws.WriteJSON(v)
+	})
 }
 
 func (server *WebServer) getIdHandler(w http.ResponseWriter, r *http.Request) {

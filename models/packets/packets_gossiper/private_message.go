@@ -10,7 +10,7 @@ type PrivateMessage struct {
 	HopLimit    uint32 `json:"hop-limit"`
 }
 
-func (msg PrivateMessage) String() string {
+func (msg *PrivateMessage) String() string {
 	return fmt.Sprintf("PRIVATE origin %s hop-limit %d contents %s to %s", msg.Origin, msg.HopLimit, msg.Text, msg.Destination)
 }
 
