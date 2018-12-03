@@ -20,7 +20,7 @@ func (addr *Address) ToIpPort() string {
 	return fmt.Sprintf("%s:%d", addr.udpAddr.IP, addr.udpAddr.Port)
 }
 
-func (addr Address) String() string {
+func (addr *Address) String() string {
 	if addr.IsEmpty() {
 		return ""
 	}

@@ -20,7 +20,7 @@ func (set *SetVar) Set(s string) error {
 	return nil
 }
 
-func (set SetVar) String() string {
+func (set *SetVar) String() string {
 	ls := []string{}
 	for _, p := range set.peers {
 		ls = append(ls, p.Addr.ToIpPort())
@@ -28,6 +28,6 @@ func (set SetVar) String() string {
 	return strings.Join(ls, ",")
 }
 
-func (set SetVar) ToSet() *Set {
+func (set *SetVar) ToSet() *Set {
 	return NewSet(set.peers...)
 }

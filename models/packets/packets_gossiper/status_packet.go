@@ -23,7 +23,7 @@ func (packet *StatusPacket) ToGossipPacket() *GossipPacket {
 	}
 }
 
-func (packet StatusPacket) String() string {
+func (packet *StatusPacket) String() string {
 	ls := packet.wantString()
 	return fmt.Sprintf("STATUS %s", strings.Join(ls, " "))
 }

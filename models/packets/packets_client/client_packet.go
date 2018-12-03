@@ -126,7 +126,7 @@ func (packet *ClientPacket) Check() error {
 	return fmt.Errorf("ClientPacket should have at least and at most one entry not nil instead of %s", packet.String())
 }
 
-func (packet ClientPacket) String() string {
+func (packet *ClientPacket) String() string {
 	ls := []string{}
 	if packet.IsGetId() {
 		ls = append(ls, packet.GetId.String())

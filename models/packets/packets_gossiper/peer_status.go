@@ -7,6 +7,6 @@ type PeerStatus struct {
 	NextID     uint32 `json:"next-id"`
 }
 
-func (ps PeerStatus) String() string {
+func (ps *PeerStatus) String() string {
 	return fmt.Sprintf("peer %s nextID %d", ps.Identifier, ps.NextID)
 }
