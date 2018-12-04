@@ -15,6 +15,8 @@ type ClientPacket struct {
 	IndexFile   *IndexFilePacket   `json:"index-file"`
 	RequestFile *RequestFilePacket `json:"request-file"`
 
+	SearchFiles *SearchFilesPacket `json:"search-files"`
+
 	SubscribeMessage *SubscribePacket `json:"subscribe-message"`
 	SubscribeNode    *SubscribePacket `json:"subscribe-node"`
 	SubscribeOrigin  *SubscribePacket `json:"subscribe-origin"`
@@ -57,6 +59,10 @@ func (packet *ClientPacket) IsSubscribeFile() bool {
 	return packet.SubscribeFile != nil
 }
 
+func (packet *ClientPacket) IsSearchFiles() bool {
+	return packet.SearchFiles != nil
+}
+
 func (packet *ClientPacket) AckPrint() {
 
 	if packet.IsGetId() {
@@ -75,6 +81,10 @@ func (packet *ClientPacket) AckPrint() {
 	}
 	if packet.IsIndexFile() {
 		packet.IndexFile.AckPrint()
+	}
+
+	if packet.IsSearchFiles() {
+		packet.SearchFiles.AckPrint()
 	}
 
 	if packet.IsSubscribeMessage() {
@@ -96,12 +106,25 @@ func (packet *ClientPacket) Check() error {
 	if packet.IsGetId() {
 		counter += 1
 	}
+
 	if packet.IsPostMessage() {
 		counter += 1
 	}
 	if packet.IsPostNode() {
 		counter += 1
 	}
+
+	if packet.IsIndexFile() {
+		counter += 1
+	}
+	if packet.IsRequestFile() {
+		counter += 1
+	}
+
+	if packet.IsSearchFiles() {
+		counter += 1
+	}
+
 	if packet.IsSubscribeMessage() {
 		counter += 1
 	}
@@ -111,15 +134,10 @@ func (packet *ClientPacket) Check() error {
 	if packet.IsSubscribeOrigin() {
 		counter += 1
 	}
-	if packet.IsIndexFile() {
-		counter += 1
-	}
-	if packet.IsRequestFile() {
-		counter += 1
-	}
 	if packet.IsSubscribeFile() {
 		counter += 1
 	}
+
 	if counter == 1 {
 		return nil
 	}
@@ -131,18 +149,25 @@ func (packet *ClientPacket) String() string {
 	if packet.IsGetId() {
 		ls = append(ls, packet.GetId.String())
 	}
+
 	if packet.IsPostMessage() {
 		ls = append(ls, packet.PostMessage.String())
 	}
 	if packet.IsPostNode() {
 		ls = append(ls, packet.PostNode.String())
 	}
+
 	if packet.IsIndexFile() {
 		ls = append(ls, packet.IndexFile.String())
 	}
 	if packet.IsRequestFile() {
 		ls = append(ls, packet.RequestFile.String())
 	}
+
+	if packet.IsSearchFiles() {
+		ls = append(ls, packet.SearchFiles.String())
+	}
+
 	if packet.IsSubscribeMessage() {
 		ls = append(ls, packet.SubscribeMessage.String(subscription.Message))
 	}

@@ -20,12 +20,12 @@ import (
 )
 
 const (
+	//bufferedChanSize    = 1000 * 1000 // not sure if useful
 	timeoutDuration     = 1 * time.Second
 	antiEntropyDuration = 1 * time.Second
 	udpPacketMaxSize    = 65536
 	hopLimit            = 10
 	debug               = false
-	//bufferedChanSize    = 1000 * 1000 // not sure if useful
 )
 
 type Gossiper struct {
@@ -53,6 +53,7 @@ type Gossiper struct {
 	IndexedFilesChan    files.FileChan
 	FilesDownloader     files.Downloader
 	DownloadedFilesChan files.FileChan
+	FilesSearcher       files.Searcher
 }
 
 func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.Set,
@@ -77,23 +78,24 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 	}
 
 	updatesChannels := updates.NewChannels(guiEnabled)
+	peersSet.SetNodeChan(updatesChannels)
 	routingTable := routing.NewTable(name, updatesChannels)
 	vectorClock := vector_clock.NewVectorClock(updatesChannels)
 	conversations := conv.NewConversations(updatesChannels)
 	uploader := files.NewFilesUploader(guiEnabled)
 	downloader := files.NewFilesDownloader(guiEnabled)
-	peersSet.SetNodeChan(updatesChannels)
+	searcher := files.NewSearcher()
 
 	return &Gossiper{
 		mode:           mode,
 		debug:          debug,
-		ClientAddr:     clientAddr,
 		clientConn:     clientConn,
 		gossiperConn:   peerConn,
 		rTimerDuration: time.Duration(rTimerDuration) * time.Second,
 
 		Origin:              name,
 		GossipAddr:          address,
+		ClientAddr:          clientAddr,
 		GUIPort:             guiPort,
 		FromClientChan:      make(chan *packets_client.ClientPacket), // bufferedChanSize),
 		FromGossipChan:      make(chan *GossipChannelElement),        // bufferedChanSize),
@@ -109,6 +111,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		IndexedFilesChan:    uploader.FileChan,
 		FilesDownloader:     downloader,
 		DownloadedFilesChan: downloader.FileChan,
+		FilesSearcher:       searcher,
 	}
 }
 
@@ -269,6 +272,32 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 		}
 	} else if packet.IsIndexFile() {
 		g.FilesUploader.IndexFile(packet.IndexFile.Filename)
+	} else if packet.IsSearchFiles() {
+		search := files.NewSearch(packet.SearchFiles.Keywords, packet.SearchFiles.Budget)
+		go g.searchHandler(search)
+	}
+}
+
+func (g *Gossiper) searchHandler(search *files.Search) {
+	searchTicker := time.NewTicker(files.DoublingBudgetTimeout)
+	for range searchTicker.C {
+		if search.IsFull() || !search.DoubleBudget() {
+			searchTicker.Stop()
+		} else {
+			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
+				Origin:   g.Origin,
+				Budget:   search.Budget,
+				Keywords: search.Keywords,
+			})
+		}
+	}
+}
+
+func (g *Gossiper) sendBudgetPacket(packet packets_gossiper.BudgetPacket) {
+	toPeers := g.PeersSet.GetSlice()
+	packets := packet.DividePacket(len(toPeers))
+	for i, peer := range toPeers {
+		g.sendPacket(packets[i], peer)
 	}
 }
 

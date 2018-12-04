@@ -50,11 +50,11 @@ func NewFilesDownloader(activateChan bool) *downloader {
 	}
 }
 
-func (downloader *downloader) AddNewFile(filename, hash string) bool {
+func (downloader *downloader) AddNewFile(filename, metafileHash string) bool {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
 
-	if _, ok := downloader.downloadedMetafilesToFilename[hash]; ok {
+	if _, ok := downloader.downloadedMetafilesToFilename[metafileHash]; ok {
 		common.HandleAbort("already downloaded (or currently downloading) this file", nil)
 		return false
 	}
@@ -62,7 +62,7 @@ func (downloader *downloader) AddNewFile(filename, hash string) bool {
 		common.HandleAbort(fmt.Sprintf("already a file named %s in %s", filename, downloadsPath), nil)
 		return false
 	}
-	downloader.awaitingMetafiles[hash] = &awaitingMetafile{
+	downloader.awaitingMetafiles[metafileHash] = &awaitingMetafile{
 		filename: filename,
 		timeout:  timeouts.NewTimeout(),
 	}
@@ -77,7 +77,6 @@ func (downloader *downloader) SetTimeout(hash string, callback func()) {
 	} else if awaitingChunk, ok := downloader.awaitingChunks[hash]; ok {
 		awaitingChunk.timeout.SetIfNotActive(timeoutDuration, callback)
 	}
-
 }
 
 func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]string, string, int) {

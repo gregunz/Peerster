@@ -1,14 +1,13 @@
 package main
 
 import (
-	"fmt"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/utils"
 )
 
 func main() {
-	port := "localhost:0"
-	addr, conn := utils.ConnectToIpPort(port)
-	fmt.Println(addr.String())
-	fmt.Println(conn.LocalAddr())
-	conn.Close()
+	d := utils.Distributor(32, 3)
+	for i := 0; i < 10; i++ {
+		logger.Printlnf("%d", d())
+	}
 }
