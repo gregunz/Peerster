@@ -3,6 +3,7 @@ package packets_gossiper
 import (
 	"fmt"
 	"github.com/gregunz/Peerster/logger"
+	"github.com/gregunz/Peerster/utils"
 	"strings"
 )
 
@@ -14,7 +15,14 @@ type SearchReply struct {
 }
 
 func (packet *SearchReply) AckPrint() {
-	logger.Printlnf(packet.String())
+	for _, res := range packet.Results {
+		chunkList := []string{}
+		for _, chunk := range res.ChunkMap {
+			chunkList = append(chunkList, fmt.Sprintf("%d", chunk))
+		}
+		logger.Printlnf("FOUND match %s at %s metafile=%s chunks=%s",
+			res.FileName, packet.Origin, utils.HashToHex(res.MetafileHash), strings.Join(chunkList, ","))
+	}
 }
 
 func (packet *SearchReply) ToGossipPacket() *GossipPacket {
