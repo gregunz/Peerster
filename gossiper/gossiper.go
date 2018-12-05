@@ -21,12 +21,12 @@ import (
 
 const (
 	//bufferedChanSize    = 1000 * 1000 // not sure if useful
-	timeoutDuration       = 1 * time.Second
-	antiEntropyDuration   = 1 * time.Second
 	udpPacketMaxSize      = 65536
 	hopLimit              = 10
-	debug                 = false
+	timeoutDuration       = 1 * time.Second
+	antiEntropyDuration   = 1 * time.Second
 	doublingBudgetTimeout = 1 * time.Second
+	debug                 = true
 )
 
 type Gossiper struct {
@@ -261,48 +261,70 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 		msg := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message, packet.PostMessage.Destination, hopLimit)
 		g.transmit(msg, false)
 	} else if packet.IsRequestFile() {
-		canDownload := g.FilesDownloader.AddNewFile(packet.RequestFile.Filename, packet.RequestFile.Request)
-		if canDownload {
-			request := &packets_gossiper.DataRequest{
-				Origin:      g.Origin,
-				Destination: packet.RequestFile.Destination,
-				HopLimit:    hopLimit,
-				HashValue:   utils.HexToHash(packet.RequestFile.Request),
+		if packet.RequestFile.Destination != "" { // download file from node (hw02)
+			g.downloadHandler(packet.RequestFile)
+		} else { // download a searched file (hw03)
+			for _, search := range g.FilesSearcher.GetFullSearches() {
+				if search.IsFull() && search.Match(packet.RequestFile.Filename) {
+					// let's download the file now from all origins involved
+					for _, requestFile := range search.ToRequestFiles() {
+						g.downloadHandler(requestFile)
+					}
+				}
 			}
-			g.transmit(request, false)
 		}
 	} else if packet.IsIndexFile() {
 		g.FilesUploader.IndexFile(packet.IndexFile.Filename, true)
 	} else if packet.IsSearchFiles() {
-		search := g.FilesSearcher.Search(packet.SearchFiles.Keywords, packet.SearchFiles.Budget)
-		go g.searchHandler(search)
+		g.searchHandler(packet.SearchFiles)
 	}
 }
 
-func (g *Gossiper) searchHandler(search *files.Search) {
-	searchTicker := time.NewTicker(doublingBudgetTimeout)
-	for range searchTicker.C {
-		if search.IsFull() || !search.DoubleBudget() {
-			searchTicker.Stop()
-			if search.IsFull() {
-				// let's download the file now
-				//TODO
+func (g *Gossiper) downloadHandler(requestFile *packets_client.RequestFilePacket) {
+	// not checking if can download because it does not enable downloading from different origins yet
+	//canDownload :=
+	g.FilesDownloader.AddNewFile(requestFile.Filename, requestFile.Request)
+	//if canDownload {
+	request := &packets_gossiper.DataRequest{
+		Origin:      g.Origin,
+		Destination: requestFile.Destination,
+		HopLimit:    hopLimit,
+		HashValue:   utils.HexToHash(requestFile.Request),
+	}
+	g.transmit(request, false)
+	//}
+}
+
+func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
+	search := g.FilesSearcher.Search(packet.Keywords, packet.Budget)
+	go func() {
+		searchTicker := time.NewTicker(doublingBudgetTimeout)
+		for range searchTicker.C {
+			if search.IsFull() || !search.DoubleBudget() {
+				searchTicker.Stop()
+			} else {
+				g.sendBudgetPacket(&packets_gossiper.SearchRequest{
+					Origin:   g.Origin,
+					Budget:   search.Budget,
+					Keywords: search.Keywords,
+				})
 			}
-		} else {
-			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
-				Origin:   g.Origin,
-				Budget:   search.Budget,
-				Keywords: search.Keywords,
-			})
 		}
-	}
+	}()
 }
 
-func (g *Gossiper) sendBudgetPacket(packet packets_gossiper.BudgetPacket) {
-	toPeers := g.PeersSet.GetSlice()
-	packets := packet.DividePacket(len(toPeers))
-	for i, peer := range toPeers {
-		g.sendPacket(packets[i], peer)
+func (g *Gossiper) sendBudgetPacket(packet packets_gossiper.BudgetPacket, exceptFromPeer ...*peers.Peer) {
+	if packet.GetBudget() > 0 {
+		toPeers := g.PeersSet.Filter(exceptFromPeer...).GetSlice()
+		if len(toPeers) > 0 {
+			packets := packet.DividePacket(len(toPeers))
+			for i, peer := range toPeers {
+				packet := packets[i]
+				if packet.GetBudget() > 0 {
+					g.sendPacket(packet, peer)
+				}
+			}
+		}
 	}
 }
 
@@ -331,7 +353,7 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 			} else if packet.IsDataReply() {
 				g.handleDataReply(packet.DataReply)
 			} else if packet.IsSearchRequest() {
-				g.handleSearchRequest(packet.SearchRequest)
+				g.handleSearchRequest(packet.SearchRequest, fromPeer)
 			} else if packet.IsSearchReply() {
 				g.handleSearchReply(packet.SearchReply)
 			}
@@ -455,23 +477,48 @@ func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
 
 }
 
-func (g *Gossiper) handleSearchRequest(packet *packets_gossiper.SearchRequest) {
-	results := g.FilesDownloader.GetAllSearchResults()
+func (g *Gossiper) handleSearchRequest(packet *packets_gossiper.SearchRequest, fromPeer *peers.Peer) {
+
+	// forward request with budget - 1
+	newPacket := &packets_gossiper.SearchRequest{
+		Origin:   packet.Origin,
+		Budget:   packet.Budget - 1,
+		Keywords: packet.Keywords,
+	}
+	g.sendBudgetPacket(newPacket, fromPeer)
+
+	// reply to the request given the matching results
+
+	matchingResults := g.FilesDownloader.GetAllSearchResults(packet.Keywords)
 	for _, indexedFile := range g.FilesUploader.GetAllFiles() {
-		results = append(results, indexedFile.ToSearchResult())
+		if utils.Match(indexedFile.Name, packet.Keywords) {
+			matchingResults = append(matchingResults, indexedFile.ToSearchResult())
+		}
 	}
 
-	reply := &packets_gossiper.SearchReply{
-		Origin:      g.Origin,
-		Destination: packet.Origin,
-		HopLimit:    hopLimit,
-		Results:     results,
+	if len(matchingResults) > 0 {
+		reply := &packets_gossiper.SearchReply{
+			Origin:      g.Origin,
+			Destination: packet.Origin,
+			HopLimit:    hopLimit,
+			Results:     matchingResults,
+		}
+		g.transmit(reply, false)
 	}
-	g.transmit(reply, false)
 }
 
 func (g *Gossiper) handleSearchReply(packet *packets_gossiper.SearchReply) {
-
+	if packet.Destination == g.Origin {
+		g.FilesSearcher.Ack(packet)
+		for _, search := range g.FilesSearcher.GetFullSearches() {
+			if search.IsFull() {
+				// hw03 print
+				logger.Printlnf("SEARCH FINISHED")
+			}
+		}
+	} else {
+		g.transmit(packet, true)
+	}
 }
 
 func (g *Gossiper) sendPacket(packet packets_gossiper.GossipPacketI, to ...*peers.Peer) {
@@ -525,7 +572,7 @@ func (g *Gossiper) handleSendPacket(packet packets_gossiper.GossipPacketI, toPee
 		})
 	} else if packetToSend.IsDataRequest() {
 		hashString := utils.HashToHex(packetToSend.DataRequest.HashValue)
-		g.FilesDownloader.SetTimeout(hashString, func() {
+		g.FilesDownloader.SetTimeout(hashString, packetToSend.DataRequest.Destination, func() {
 			g.transmit(packetToSend.DataRequest, false)
 		})
 	}

@@ -152,21 +152,21 @@ func (packet *GossipPacket) AckPrint(fromPeer *peers.Peer, myOrigin string) {
 	// for now on, some of the rest is commented for better performance, might setup a verbosity level to enable them anyway
 
 	if packet.IsDataRequest() { //not required by homework (to check)
-		//packet.DataRequest.AckPrint(myOrigin)
+		packet.DataRequest.AckPrint(myOrigin)
 	}
 	if packet.IsDataReply() { //not required by homework (to check)
-		//packet.DataReply.AckPrint(myOrigin)
+		packet.DataReply.AckPrint(myOrigin)
 	}
 	if packet.IsSearchRequest() { //not required by homework (to check)
-		//packet.SearchRequest.AckPrint()
+		packet.SearchRequest.AckPrint()
 	}
 	if packet.IsSearchReply() {
 		packet.SearchReply.AckPrint()
 	}
 	if packet.IsTxPublish() { //not required by homework (to check)
-		//packet.TxPublish.AckPrint()
+		packet.TxPublish.AckPrint()
 	}
 	if packet.IsBlockPublish() { //not required by homework (to check)
-		//packet.BlockPublish.AckPrint()
+		packet.BlockPublish.AckPrint()
 	}
 }

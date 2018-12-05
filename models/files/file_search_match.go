@@ -29,15 +29,25 @@ func (match *SearchMatch) Ack(origin string, result *packets_gossiper.SearchResu
 	match.Lock()
 	defer match.Unlock()
 
-	for _, c := range result.ChunkMap {
-		if set, ok := match.chunkOrigins[c]; ok {
+	for _, chunkIdx := range result.ChunkMap {
+		if set, ok := match.chunkOrigins[chunkIdx]; ok {
 			set[origin] = true
 		} else {
 			set := map[string]bool{}
 			set[origin] = true
-			match.chunkOrigins[c] = set
+			match.chunkOrigins[chunkIdx] = set
 		}
 	}
+}
+
+func (match *SearchMatch) AllOrigins() map[string]bool {
+	originsSet := map[string]bool{}
+	for _, origins := range match.chunkOrigins {
+		for origin, _ := range origins {
+			originsSet[origin] = true
+		}
+	}
+	return originsSet
 }
 
 func (match *SearchMatch) IsFull() bool {

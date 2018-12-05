@@ -106,7 +106,7 @@ func (file *fileBuilder) ToSearchResult() *packets_gossiper.SearchResult {
 	chunkMap := []uint64{}
 	for i, chunkHash := range file.hashList {
 		if _, ok := file.hashToChunks[chunkHash]; ok {
-			chunkMap = append(chunkMap, uint64(i))
+			chunkMap = append(chunkMap, uint64(i+1)) // + 1 because zero is reserved for metafile
 		}
 	}
 	return &packets_gossiper.SearchResult{

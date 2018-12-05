@@ -26,23 +26,35 @@ type downloader struct {
 	mux                           sync.RWMutex
 }
 
+type awaitingMetafile struct {
+	filename string
+	timeouts map[string]*timeouts.Timeout
+}
+
+func (awaitingMetafile *awaitingMetafile) CancelTimeouts() {
+	for _, timeout := range awaitingMetafile.timeouts {
+		timeout.Cancel()
+	}
+}
+
 type awaitingChunk struct {
 	fileBuilder *fileBuilder
 	index       int
-	timeout     *timeouts.Timeout
+	timeouts    map[string]*timeouts.Timeout
 }
 
-type awaitingMetafile struct {
-	filename string
-	timeout  *timeouts.Timeout
+func (awaitingChunk *awaitingChunk) CancelTimeouts() {
+	for _, timeout := range awaitingChunk.timeouts {
+		timeout.Cancel()
+	}
 }
 
 type Downloader interface {
 	AddNewFile(filename, hash string) bool
 	AddChunkOrMetafile(hash string, data []byte) ([]string, string, int)
-	SetTimeout(hash string, callback func())
+	SetTimeout(hash, destination string, callback func())
 
-	GetAllSearchResults() []*packets_gossiper.SearchResult
+	GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult
 }
 
 func NewFilesDownloader(activateChan bool) *downloader {
@@ -69,18 +81,36 @@ func (downloader *downloader) AddNewFile(filename, metafileHash string) bool {
 	}
 	downloader.awaitingMetafiles[metafileHash] = &awaitingMetafile{
 		filename: filename,
-		timeout:  timeouts.NewTimeout(),
+		timeouts: map[string]*timeouts.Timeout{},
 	}
 	return true
 }
 
-func (downloader *downloader) SetTimeout(hash string, callback func()) {
+func (downloader *downloader) getTimeout(hash, destination string) *timeouts.Timeout {
+	var timeout *timeouts.Timeout
+	if awaitingMetafile, ok := downloader.awaitingMetafiles[hash]; ok {
+		timeout, ok = awaitingMetafile.timeouts[destination]
+		if !ok {
+			timeout = timeouts.NewTimeout()
+			awaitingMetafile.timeouts[destination] = timeout
+		}
+	} else if awaitingChunk, ok := downloader.awaitingChunks[hash]; ok {
+		timeout, ok = awaitingChunk.timeouts[destination]
+		if !ok {
+			timeout = timeouts.NewTimeout()
+			awaitingChunk.timeouts[destination] = timeout
+		}
+	}
+	return timeout
+}
+
+func (downloader *downloader) SetTimeout(hash, destination string, callback func()) {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
-	if awaitingMetafile, ok := downloader.awaitingMetafiles[hash]; ok {
-		awaitingMetafile.timeout.SetIfNotActive(timeoutDuration, callback)
-	} else if awaitingChunk, ok := downloader.awaitingChunks[hash]; ok {
-		awaitingChunk.timeout.SetIfNotActive(timeoutDuration, callback)
+
+	timeout := downloader.getTimeout(hash, destination)
+	if timeout != nil {
+		timeout.SetIfNotActive(timeoutDuration, callback)
 	}
 }
 
@@ -97,7 +127,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 
 	if awaitingMetafile, ok := downloader.awaitingMetafiles[hash]; ok { // received metafile
 
-		awaitingMetafile.timeout.Cancel()
+		awaitingMetafile.CancelTimeouts()
 		fileBuilder := NewFileBuilder(awaitingMetafile.filename, hash, data)
 		downloader.currentDownloads[hash] = fileBuilder
 
@@ -106,7 +136,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 			chunk := &awaitingChunk{
 				fileBuilder: fileBuilder,
 				index:       idx + 1, // starting at 1 (zero is reserved for metafile)
-				timeout:     timeouts.NewTimeout(),
+				timeouts:    map[string]*timeouts.Timeout{},
 			}
 			downloader.awaitingChunks[h] = chunk
 			awaitingHashes = append(awaitingHashes, h)
@@ -118,7 +148,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 
 	} else if awaitingChunk, ok := downloader.awaitingChunks[hash]; ok { // received chunk
 
-		awaitingChunk.timeout.Cancel()
+		awaitingChunk.CancelTimeouts()
 		builder := awaitingChunk.fileBuilder
 		if builder.AddChunks(data) {
 			delete(downloader.awaitingChunks, hash)
@@ -140,13 +170,15 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 	return nil, "", -1
 }
 
-func (downloader *downloader) GetAllSearchResults() []*packets_gossiper.SearchResult {
+func (downloader *downloader) GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult {
 	downloader.mux.RLock()
 	defer downloader.mux.RUnlock()
 
 	results := []*packets_gossiper.SearchResult{}
 	for _, builder := range downloader.currentDownloads {
-		results = append(results, builder.ToSearchResult())
+		if utils.Match(builder.name, keywords) {
+			results = append(results, builder.ToSearchResult())
+		}
 	}
 	return results
 }

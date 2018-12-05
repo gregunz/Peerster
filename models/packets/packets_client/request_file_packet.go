@@ -12,7 +12,11 @@ type RequestFilePacket struct {
 }
 
 func (packet *RequestFilePacket) String() string {
-	return fmt.Sprintf("REQUEST FILE %s of %s with hash %s", packet.Filename, packet.Destination, packet.Request)
+	s := ""
+	if packet.Destination != "" {
+		s = fmt.Sprintf(" from %s", packet.Destination)
+	}
+	return fmt.Sprintf("REQUEST FILE %s%s with hash %s", packet.Filename, s, packet.Request)
 }
 
 func (packet *RequestFilePacket) AckPrint() {

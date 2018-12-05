@@ -1,9 +1,9 @@
 package files
 
 import (
+	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/utils"
-	"strings"
 	"sync"
 )
 
@@ -38,6 +38,12 @@ func (search *Search) DoubleBudget() bool {
 	return false //cannot double Budget when reached `maxBudget`
 }
 
+func (search *Search) Match(filename string) bool {
+	search.RLock()
+	defer search.RUnlock()
+	return utils.Match(filename, search.Keywords)
+}
+
 func (search *Search) Ack(reply *packets_gossiper.SearchReply) {
 	search.RLock()
 	defer search.RUnlock()
@@ -47,14 +53,7 @@ func (search *Search) Ack(reply *packets_gossiper.SearchReply) {
 		if match, ok := search.matches[fileId]; ok {
 			match.Ack(reply.Origin, result)
 		} else {
-			keywordMatched := false
-			for _, k := range search.Keywords {
-				if strings.Contains(result.FileName, k) { // here is where we check for keyword match
-					keywordMatched = true
-					break
-				}
-			}
-			if keywordMatched {
+			if search.Match(result.FileName) {
 				search.Lock()
 				search.matches[fileId] = NewSearchMatch(reply.Origin, result)
 				search.Unlock()
@@ -74,4 +73,22 @@ func (search *Search) IsFull() bool {
 		}
 	}
 	return numFullMatches >= minNumFullMatches
+}
+
+func (search *Search) ToRequestFiles() []*packets_client.RequestFilePacket {
+	search.RLock()
+	defer search.RUnlock()
+
+	requests := []*packets_client.RequestFilePacket{}
+	// adding metafile requests first
+	for _, match := range search.matches {
+		for origin, _ := range match.AllOrigins() {
+			requests = append(requests, &packets_client.RequestFilePacket{
+				Destination: origin,
+				Filename:    match.filename,
+				Request:     utils.HashToHex(match.metafileHash),
+			})
+		}
+	}
+	return requests
 }

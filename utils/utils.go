@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
 	"math/rand"
+	"strings"
 )
 
 func FlipCoin() bool {
@@ -36,6 +37,15 @@ func HexToHash(hexHash string) []byte {
 		return nil
 	}
 	return hash
+}
+
+func Match(filename string, keywords []string) bool {
+	for _, k := range keywords {
+		if strings.Contains(filename, k) { // here is where we check for keyword match
+			return true
+		}
+	}
+	return false
 }
 
 func Distributor(budget int, num int) func() int {

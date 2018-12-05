@@ -22,9 +22,9 @@ const (
 type FileType struct {
 	Name     string
 	Size     int
-	Hashes   []string
+	Hashes   []string // list of chunk hashes
 	MetaFile []byte
-	MetaHash string
+	MetaHash string // hash of metafile
 }
 
 func nameToSharedPath(name string) string {
@@ -86,7 +86,7 @@ func (file *FileType) GetChunkOrMetafile(hash string) ([]byte, error) {
 func (file *FileType) ToSearchResult() *packets_gossiper.SearchResult {
 	chunkMap := []uint64{}
 	for i, _ := range file.Hashes {
-		chunkMap = append(chunkMap, uint64(i))
+		chunkMap = append(chunkMap, uint64(i+1)) // + 1 because zero is reserved for metafile
 	}
 	return &packets_gossiper.SearchResult{
 		FileName:     file.Name,
