@@ -49,9 +49,16 @@ func (awaitingChunk *awaitingChunk) CancelTimeouts() {
 	}
 }
 
+type AddChunkOrMetaFileOutput struct {
+	AwaitingMetafile []string
+	FileName         string
+	ChunkIndex       int
+	FileIsBuilt      bool
+}
+
 type Downloader interface {
 	AddNewFile(filename, hash string) bool
-	AddChunkOrMetafile(hash string, data []byte) ([]string, string, int)
+	AddChunkOrMetafile(hash string, data []byte) *AddChunkOrMetaFileOutput
 	SetTimeout(hash, destination string, callback func())
 
 	GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult
@@ -114,7 +121,7 @@ func (downloader *downloader) SetTimeout(hash, destination string, callback func
 	}
 }
 
-func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]string, string, int) {
+func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) *AddChunkOrMetaFileOutput {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
 
@@ -122,7 +129,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 	dataHash := utils.HashToHex(chunkHash[:])
 	if dataHash != hash {
 		common.HandleAbort(fmt.Sprintf("data does not correspond to provided hash (%s != %s)", hash, dataHash), nil)
-		return nil, "", -1
+		return &AddChunkOrMetaFileOutput{ChunkIndex: -1}
 	}
 
 	if awaitingMetafile, ok := downloader.awaitingMetafiles[hash]; ok { // received metafile
@@ -142,32 +149,44 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 			awaitingHashes = append(awaitingHashes, h)
 		}
 
-		delete(downloader.awaitingMetafiles, hash)
+		//delete(downloader.awaitingMetafiles, hash)
 		downloader.downloadedMetafilesToFilename[hash] = fileBuilder.name
-		return awaitingHashes, fileBuilder.name, 0
+		return &AddChunkOrMetaFileOutput{
+			AwaitingMetafile: awaitingHashes,
+			FileName:         fileBuilder.name,
+			ChunkIndex:       0,
+			FileIsBuilt:      false,
+		}
 
 	} else if awaitingChunk, ok := downloader.awaitingChunks[hash]; ok { // received chunk
 
 		awaitingChunk.CancelTimeouts()
 		builder := awaitingChunk.fileBuilder
 		if builder.AddChunks(data) {
-			delete(downloader.awaitingChunks, hash)
+			//delete(downloader.awaitingChunks, hash)
 		}
+		fileIsBuilt := false
 		if builder.IsComplete() {
 			file := builder.Build()
 			if file != nil {
 				logger.Printlnf("RECONSTRUCTED file %s", file.Name)
 				delete(downloader.currentDownloads, builder.metahash)
+				fileIsBuilt = true
 				downloader.FileChan.Push(file)
 			} else {
 				common.HandleError(fmt.Errorf("build of file failed"))
 			}
 		}
-		return nil, builder.name, awaitingChunk.index
+		return &AddChunkOrMetaFileOutput{
+			AwaitingMetafile: nil,
+			FileName:         builder.name,
+			ChunkIndex:       awaitingChunk.index,
+			FileIsBuilt:      fileIsBuilt,
+		}
 	}
 
 	//TODO: handle no match error (no consequences for now)
-	return nil, "", -1
+	return &AddChunkOrMetaFileOutput{ChunkIndex: -1}
 }
 
 func (downloader *downloader) GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult {

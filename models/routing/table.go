@@ -25,13 +25,13 @@ func NewTable(myOrigin string, originChan OriginChan) *table {
 }
 
 func (table *table) getOrCreateHandler(origin string) *tableHandler {
+	if table.myOrigin == origin {
+		return nil
+	}
 	h, ok := table.handlers[origin]
 	if !ok {
 		h = newRoutingTableHandler(origin)
 		table.handlers[origin] = h
-		if table.myOrigin != origin {
-			table.originChan.AddOrigin(origin)
-		}
 	}
 	return h
 }

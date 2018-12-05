@@ -45,18 +45,16 @@ func (search *Search) Match(filename string) bool {
 }
 
 func (search *Search) Ack(reply *packets_gossiper.SearchReply) {
-	search.RLock()
-	defer search.RUnlock()
+	search.Lock()
+	defer search.Unlock()
 
 	for _, result := range reply.Results {
 		fileId := utils.HashToHex(result.MetafileHash)
 		if match, ok := search.matches[fileId]; ok {
 			match.Ack(reply.Origin, result)
 		} else {
-			if search.Match(result.FileName) {
-				search.Lock()
+			if utils.Match(result.FileName, search.Keywords) {
 				search.matches[fileId] = NewSearchMatch(reply.Origin, result)
-				search.Unlock()
 			}
 		}
 	}
@@ -75,20 +73,24 @@ func (search *Search) IsFull() bool {
 	return numFullMatches >= minNumFullMatches
 }
 
-func (search *Search) ToRequestFiles() []*packets_client.RequestFilePacket {
+func (search *Search) ToRequestFiles(filename, metahash string) []*packets_client.RequestFilePacket {
 	search.RLock()
 	defer search.RUnlock()
 
 	requests := []*packets_client.RequestFilePacket{}
 	// adding metafile requests first
 	for _, match := range search.matches {
-		for origin, _ := range match.AllOrigins() {
-			requests = append(requests, &packets_client.RequestFilePacket{
-				Destination: origin,
-				Filename:    match.filename,
-				Request:     utils.HashToHex(match.metafileHash),
-			})
+		match.RLock()
+		if match.metafileHash == metahash {
+			for origin, _ := range match.AllOrigins() {
+				requests = append(requests, &packets_client.RequestFilePacket{
+					Destination: origin,
+					Filename:    filename,
+					Request:     match.metafileHash,
+				})
+			}
 		}
+		match.RUnlock()
 	}
 	return requests
 }

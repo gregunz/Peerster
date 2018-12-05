@@ -30,7 +30,7 @@ func (handler *tableHandler) AckRumor(rumor *packets_gossiper.RumorMessage, from
 
 	if rumor.Origin == handler.origin && rumor.ID > handler.latestID {
 		handler.latestID = rumor.ID
-		if !handler.peer.Addr.Equals(fromPeer.Addr) {
+		if handler.peer == nil || !handler.peer.Addr.Equals(fromPeer.Addr) {
 			handler.peer = fromPeer
 			logger.Printlnf("DSDV %s %s", handler.origin, handler.peer.Addr.ToIpPort())
 		}

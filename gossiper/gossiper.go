@@ -23,10 +23,11 @@ const (
 	//bufferedChanSize    = 1000 * 1000 // not sure if useful
 	udpPacketMaxSize      = 65536
 	hopLimit              = 10
+	blockHopLimit         = 20
 	timeoutDuration       = 1 * time.Second
 	antiEntropyDuration   = 1 * time.Second
 	doublingBudgetTimeout = 1 * time.Second
-	debug                 = true
+	debug                 = false
 )
 
 type Gossiper struct {
@@ -265,9 +266,9 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 			g.downloadHandler(packet.RequestFile)
 		} else { // download a searched file (hw03)
 			for _, search := range g.FilesSearcher.GetFullSearches() {
-				if search.IsFull() && search.Match(packet.RequestFile.Filename) {
+				if search.IsFull() {
 					// let's download the file now from all origins involved
-					for _, requestFile := range search.ToRequestFiles() {
+					for _, requestFile := range search.ToRequestFiles(packet.RequestFile.Filename, packet.RequestFile.Request) {
 						g.downloadHandler(requestFile)
 					}
 				}
@@ -296,21 +297,33 @@ func (g *Gossiper) downloadHandler(requestFile *packets_client.RequestFilePacket
 }
 
 func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
+
 	search := g.FilesSearcher.Search(packet.Keywords, packet.Budget)
-	go func() {
-		searchTicker := time.NewTicker(doublingBudgetTimeout)
-		for range searchTicker.C {
-			if search.IsFull() || !search.DoubleBudget() {
-				searchTicker.Stop()
-			} else {
-				g.sendBudgetPacket(&packets_gossiper.SearchRequest{
-					Origin:   g.Origin,
-					Budget:   search.Budget,
-					Keywords: search.Keywords,
-				})
-			}
+	g.sendBudgetPacket(&packets_gossiper.SearchRequest{
+		Origin:   g.Origin,
+		Budget:   search.Budget,
+		Keywords: search.Keywords,
+	})
+
+	searchTicker := time.NewTicker(doublingBudgetTimeout)
+	for range searchTicker.C {
+
+		if search.IsFull() || !search.DoubleBudget() {
+			logger.Printlnf("STOPPING SEARCH")
+			searchTicker.Stop()
+		} else {
+
+			logger.Printlnf("SEARCHING AGAIN with budget=%d, %s", search.Budget, *search)
+			search.DoubleBudget()
+			logger.Printlnf("SEARCHING AGAIN with budget=%d", search.Budget)
+			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
+				Origin:   g.Origin,
+				Budget:   search.Budget,
+				Keywords: search.Keywords,
+			})
 		}
-	}()
+	}
+
 }
 
 func (g *Gossiper) sendBudgetPacket(packet packets_gossiper.BudgetPacket, exceptFromPeer ...*peers.Peer) {
@@ -376,7 +389,9 @@ func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *pee
 
 	// saving message
 	g.VectorClock.GetOrCreateHandler(msg.Origin).Save(msg)
-	g.RoutingTable.GetOrCreateHandler(msg.Origin).AckRumor(msg, fromPeer)
+	if msg.Origin != g.Origin {
+		g.RoutingTable.GetOrCreateHandler(msg.Origin).AckRumor(msg, fromPeer)
+	}
 
 	msgToSend := &packets_gossiper.RumorMessage{
 		ID:     msg.ID,
@@ -454,7 +469,9 @@ func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
 	if packet.Destination != g.Origin {
 		g.transmit(packet, true)
 	} else { // packet is for us
-		awaitingHashes, filename, index := g.FilesDownloader.AddChunkOrMetafile(utils.HashToHex(packet.HashValue), packet.Data)
+		dataHash := utils.HashToHex(packet.HashValue)
+		output := g.FilesDownloader.AddChunkOrMetafile(dataHash, packet.Data)
+		awaitingHashes, index, filename, fileIsBuilt := output.AwaitingMetafile, output.ChunkIndex, output.FileName, output.FileIsBuilt
 		if index == 0 { // metafile
 			logger.Printlnf("DOWNLOADING metafile of %s from %s", filename, packet.Origin)
 		} else if index > 0 { // chunk
@@ -470,8 +487,10 @@ func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
 				}
 				g.transmit(packetToSend, false)
 			}
-		} else { // download complete
+		} else if fileIsBuilt { // download complete
 			g.FilesUploader.IndexFile(filename, false)
+		} else {
+			logger.Printlnf("already received this data (hash=%s)", dataHash)
 		}
 	}
 

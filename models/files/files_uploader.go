@@ -52,7 +52,7 @@ func (uploader *uploader) IndexFile(filename string, sharedPath bool) {
 	uploader.chunksToFile[file.MetaHash] = file
 	uploader.filenameToFile[filename] = file
 	uploader.FileChan.Push(file)
-	logger.Printlnf("new file indexed with hash %s", file.MetaHash)
+	logger.Printlnf("new file named %s indexed with hash %s", file.Name, file.MetaHash)
 	for _, hash := range file.Hashes {
 		if _, ok := uploader.chunksToFile[hash]; ok {
 			common.HandleError(fmt.Errorf("collision of hashes of some indexed files"))

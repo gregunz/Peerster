@@ -2,12 +2,12 @@ package files
 
 import (
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
+	"github.com/gregunz/Peerster/utils"
 	"sync"
 )
 
 type SearchMatch struct {
-	filename     string
-	metafileHash []byte
+	metafileHash string
 	chunkOrigins map[uint64]map[string]bool
 	numOfChunks  uint64
 
@@ -16,8 +16,7 @@ type SearchMatch struct {
 
 func NewSearchMatch(origin string, result *packets_gossiper.SearchResult) *SearchMatch {
 	match := &SearchMatch{
-		filename:     result.FileName,
-		metafileHash: result.MetafileHash,
+		metafileHash: utils.HashToHex(result.MetafileHash),
 		chunkOrigins: map[uint64]map[string]bool{},
 		numOfChunks:  result.ChunkCount,
 	}
