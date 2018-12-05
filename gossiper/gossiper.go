@@ -21,11 +21,12 @@ import (
 
 const (
 	//bufferedChanSize    = 1000 * 1000 // not sure if useful
-	timeoutDuration     = 1 * time.Second
-	antiEntropyDuration = 1 * time.Second
-	udpPacketMaxSize    = 65536
-	hopLimit            = 10
-	debug               = false
+	timeoutDuration       = 1 * time.Second
+	antiEntropyDuration   = 1 * time.Second
+	udpPacketMaxSize      = 65536
+	hopLimit              = 10
+	debug                 = false
+	doublingBudgetTimeout = 1 * time.Second
 )
 
 type Gossiper struct {
@@ -271,18 +272,22 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 			g.transmit(request, false)
 		}
 	} else if packet.IsIndexFile() {
-		g.FilesUploader.IndexFile(packet.IndexFile.Filename)
+		g.FilesUploader.IndexFile(packet.IndexFile.Filename, true)
 	} else if packet.IsSearchFiles() {
-		search := files.NewSearch(packet.SearchFiles.Keywords, packet.SearchFiles.Budget)
+		search := g.FilesSearcher.Search(packet.SearchFiles.Keywords, packet.SearchFiles.Budget)
 		go g.searchHandler(search)
 	}
 }
 
 func (g *Gossiper) searchHandler(search *files.Search) {
-	searchTicker := time.NewTicker(files.DoublingBudgetTimeout)
+	searchTicker := time.NewTicker(doublingBudgetTimeout)
 	for range searchTicker.C {
 		if search.IsFull() || !search.DoubleBudget() {
 			searchTicker.Stop()
+			if search.IsFull() {
+				// let's download the file now
+				//TODO
+			}
 		} else {
 			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
 				Origin:   g.Origin,
@@ -325,6 +330,10 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 				g.handleDataRequest(packet.DataRequest)
 			} else if packet.IsDataReply() {
 				g.handleDataReply(packet.DataReply)
+			} else if packet.IsSearchRequest() {
+				g.handleSearchRequest(packet.SearchRequest)
+			} else if packet.IsSearchReply() {
+				g.handleSearchReply(packet.SearchReply)
 			}
 		}()
 	}
@@ -429,16 +438,39 @@ func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
 		} else if index > 0 { // chunk
 			logger.Printlnf("DOWNLOADING %s chunk %d from %s", filename, index, packet.Origin)
 		}
-		for _, hashString := range awaitingHashes {
-			packetToSend := &packets_gossiper.DataRequest{
-				Origin:      g.Origin,
-				Destination: packet.Origin,
-				HopLimit:    hopLimit,
-				HashValue:   utils.HexToHash(hashString),
+		if len(awaitingHashes) > 0 {
+			for _, hashString := range awaitingHashes {
+				packetToSend := &packets_gossiper.DataRequest{
+					Origin:      g.Origin,
+					Destination: packet.Origin,
+					HopLimit:    hopLimit,
+					HashValue:   utils.HexToHash(hashString),
+				}
+				g.transmit(packetToSend, false)
 			}
-			g.transmit(packetToSend, false)
+		} else { // download complete
+			g.FilesUploader.IndexFile(filename, false)
 		}
 	}
+
+}
+
+func (g *Gossiper) handleSearchRequest(packet *packets_gossiper.SearchRequest) {
+	results := g.FilesDownloader.GetAllSearchResults()
+	for _, indexedFile := range g.FilesUploader.GetAllFiles() {
+		results = append(results, indexedFile.ToSearchResult())
+	}
+
+	reply := &packets_gossiper.SearchReply{
+		Origin:      g.Origin,
+		Destination: packet.Origin,
+		HopLimit:    hopLimit,
+		Results:     results,
+	}
+	g.transmit(reply, false)
+}
+
+func (g *Gossiper) handleSearchReply(packet *packets_gossiper.SearchReply) {
 
 }
 

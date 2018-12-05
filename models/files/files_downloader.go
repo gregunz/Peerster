@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/logger"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/timeouts"
 	"github.com/gregunz/Peerster/utils"
 	"os"
@@ -20,8 +21,9 @@ type downloader struct {
 	awaitingMetafiles             map[string]*awaitingMetafile
 	downloadedMetafilesToFilename map[string]string
 	awaitingChunks                map[string]*awaitingChunk
+	currentDownloads              map[string]*fileBuilder
 	FileChan                      FileChan
-	mux                           sync.Mutex
+	mux                           sync.RWMutex
 }
 
 type awaitingChunk struct {
@@ -39,6 +41,8 @@ type Downloader interface {
 	AddNewFile(filename, hash string) bool
 	AddChunkOrMetafile(hash string, data []byte) ([]string, string, int)
 	SetTimeout(hash string, callback func())
+
+	GetAllSearchResults() []*packets_gossiper.SearchResult
 }
 
 func NewFilesDownloader(activateChan bool) *downloader {
@@ -46,6 +50,7 @@ func NewFilesDownloader(activateChan bool) *downloader {
 		awaitingMetafiles:             map[string]*awaitingMetafile{},
 		downloadedMetafilesToFilename: map[string]string{},
 		awaitingChunks:                map[string]*awaitingChunk{},
+		currentDownloads:              map[string]*fileBuilder{},
 		FileChan:                      NewFileChan(activateChan),
 	}
 }
@@ -93,9 +98,10 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 	if awaitingMetafile, ok := downloader.awaitingMetafiles[hash]; ok { // received metafile
 
 		awaitingMetafile.timeout.Cancel()
-		fileBuilder := NewFileBuilder(awaitingMetafile.filename, data)
-		awaitingHashes := []string{}
+		fileBuilder := NewFileBuilder(awaitingMetafile.filename, hash, data)
+		downloader.currentDownloads[hash] = fileBuilder
 
+		awaitingHashes := []string{}
 		for idx, h := range fileBuilder.hashList {
 			chunk := &awaitingChunk{
 				fileBuilder: fileBuilder,
@@ -121,6 +127,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 			file := builder.Build()
 			if file != nil {
 				logger.Printlnf("RECONSTRUCTED file %s", file.Name)
+				delete(downloader.currentDownloads, builder.metahash)
 				downloader.FileChan.Push(file)
 			} else {
 				common.HandleError(fmt.Errorf("build of file failed"))
@@ -131,4 +138,15 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) ([]st
 
 	//TODO: handle no match error (no consequences for now)
 	return nil, "", -1
+}
+
+func (downloader *downloader) GetAllSearchResults() []*packets_gossiper.SearchResult {
+	downloader.mux.RLock()
+	defer downloader.mux.RUnlock()
+
+	results := []*packets_gossiper.SearchResult{}
+	for _, builder := range downloader.currentDownloads {
+		results = append(results, builder.ToSearchResult())
+	}
+	return results
 }

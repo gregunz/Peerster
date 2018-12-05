@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/utils"
 	"io/ioutil"
 	"sync"
@@ -11,12 +12,13 @@ import (
 
 type fileBuilder struct {
 	name         string
+	metahash     string
 	hashList     []string
 	hashToChunks map[string][]byte
 	mux          sync.Mutex
 }
 
-func NewFileBuilder(name string, metafile []byte) *fileBuilder {
+func NewFileBuilder(name string, metahash string, metafile []byte) *fileBuilder {
 	nChunks := len(metafile) / HashSize
 	hashToChunks := map[string][]byte{}
 	hashList := []string{}
@@ -29,6 +31,7 @@ func NewFileBuilder(name string, metafile []byte) *fileBuilder {
 	}
 	return &fileBuilder{
 		name:         name,
+		metahash:     metahash,
 		hashList:     hashList,
 		hashToChunks: hashToChunks,
 	}
@@ -97,4 +100,19 @@ func (file *fileBuilder) Build() *FileType {
 		return nil
 	}
 	return NewFile(path)
+}
+
+func (file *fileBuilder) ToSearchResult() *packets_gossiper.SearchResult {
+	chunkMap := []uint64{}
+	for i, chunkHash := range file.hashList {
+		if _, ok := file.hashToChunks[chunkHash]; ok {
+			chunkMap = append(chunkMap, uint64(i))
+		}
+	}
+	return &packets_gossiper.SearchResult{
+		FileName:     file.name,
+		MetafileHash: utils.HexToHash(file.metahash),
+		ChunkMap:     chunkMap,
+		ChunkCount:   uint64(len(file.hashList)),
+	}
 }

@@ -16,7 +16,7 @@ type uploader struct {
 }
 
 type Uploader interface {
-	IndexFile(filename string)
+	IndexFile(filename string, sharedPath bool)
 	HasChunk(chunkHash []byte) bool
 	GetData(chunkHash []byte) []byte
 	GetAllFiles() []*FileType
@@ -30,11 +30,17 @@ func NewFilesUploader(activateChan bool) *uploader {
 	}
 }
 
-func (uploader *uploader) IndexFile(filename string) {
+func (uploader *uploader) IndexFile(filename string, sharedPath bool) {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
-	file := NewFile(nameToSharedPath(filename))
+	var filepath string
+	if sharedPath {
+		filepath = nameToSharedPath(filename)
+	} else {
+		filepath = nameToDownloadsPath(filename)
+	}
+	file := NewFile(filepath)
 	if file == nil {
 		return
 	}

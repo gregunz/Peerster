@@ -40,15 +40,15 @@ func (packet *SearchReply) String() string {
 		packet.Origin, packet.HopLimit, packet.Destination, strings.Join(results, " "))
 }
 
-func (msg SearchReply) Hopped() Transmittable {
-	msg.HopLimit -= 1
-	return &msg
+func (packet SearchReply) Hopped() Transmittable {
+	packet.HopLimit -= 1
+	return &packet
 }
 
-func (msg *SearchReply) Dest() string {
-	return msg.Destination
+func (packet *SearchReply) Dest() string {
+	return packet.Destination
 }
 
-func (msg *SearchReply) IsTransmittable() bool {
-	return msg.HopLimit > 0
+func (packet *SearchReply) IsTransmittable() bool {
+	return packet.HopLimit > 0
 }

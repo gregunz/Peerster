@@ -47,4 +47,5 @@ func (packet *SearchRequest) DividePacket(num int) []BudgetPacket {
 		}
 		packets = append(packets, newPacket)
 	}
+	return packets
 }

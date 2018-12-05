@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/utils"
 	"io/ioutil"
 	"math"
@@ -80,4 +81,17 @@ func (file *FileType) GetChunkOrMetafile(hash string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("no chunks with corresponding hash %s in file %s", hash, file.Name)
+}
+
+func (file *FileType) ToSearchResult() *packets_gossiper.SearchResult {
+	chunkMap := []uint64{}
+	for i, _ := range file.Hashes {
+		chunkMap = append(chunkMap, uint64(i))
+	}
+	return &packets_gossiper.SearchResult{
+		FileName:     file.Name,
+		MetafileHash: utils.HexToHash(file.MetaHash),
+		ChunkMap:     chunkMap,
+		ChunkCount:   uint64(len(file.Hashes)),
+	}
 }
