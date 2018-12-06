@@ -1,30 +1,26 @@
 package routing
 
 import (
+	"github.com/gregunz/Peerster/models/updates"
 	"sync"
 )
 
-type table struct {
+type Table struct {
 	myOrigin   string
 	handlers   map[string]*tableHandler
-	originChan OriginChan
+	OriginChan OriginChan
 	mux        sync.Mutex
 }
 
-type Table interface {
-	GetOrCreateHandler(origin string) *tableHandler
-	GetOrigins() []string
-}
-
-func NewTable(myOrigin string, originChan OriginChan) *table {
-	return &table{
+func NewTable(myOrigin string, activateChan bool) *Table {
+	return &Table{
 		myOrigin:   myOrigin,
 		handlers:   map[string]*tableHandler{},
-		originChan: originChan,
+		OriginChan: updates.NewStringChan(activateChan),
 	}
 }
 
-func (table *table) getOrCreateHandler(origin string) *tableHandler {
+func (table *Table) getOrCreateHandler(origin string) *tableHandler {
 	if table.myOrigin == origin {
 		return nil
 	}
@@ -36,14 +32,14 @@ func (table *table) getOrCreateHandler(origin string) *tableHandler {
 	return h
 }
 
-func (table *table) GetOrCreateHandler(origin string) *tableHandler {
+func (table *Table) GetOrCreateHandler(origin string) *tableHandler {
 	table.mux.Lock()
 	defer table.mux.Unlock()
 
 	return table.getOrCreateHandler(origin)
 }
 
-func (table *table) GetOrigins() []string {
+func (table *Table) GetOrigins() []string {
 	table.mux.Lock()
 	defer table.mux.Unlock()
 

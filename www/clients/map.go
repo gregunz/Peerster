@@ -2,37 +2,36 @@ package clients
 
 import (
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"sync"
 )
 
-type Map interface {
-	Add(w Writer)
-	Get(w Writer) Client
-	Remove(w Writer)
-	Iterate(func(Writer, Client))
+type Map struct {
+	clients map[Writer]*Client
+
+	sync.RWMutex
 }
 
-type list struct {
-	clients map[Writer]Client
-	mux     sync.RWMutex
-}
-
-func NewList() Map {
-	return &list{
-		clients: map[Writer]Client{},
+func NewMap() *Map {
+	return &Map{
+		clients: map[Writer]*Client{},
 	}
 }
 
-func (l *list) Add(w Writer) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-
+func (l *Map) AddUnsafe(w Writer) {
+	logger.Printlnf("<web-server> new client just arrived")
 	l.clients[w] = NewClient()
 }
 
-func (l *list) Get(w Writer) Client {
-	l.mux.RLock()
-	defer l.mux.RUnlock()
+func (l *Map) Add(w Writer) {
+	l.Lock()
+	defer l.Unlock()
+	l.AddUnsafe(w)
+}
+
+func (l *Map) Get(w Writer) *Client {
+	l.RLock()
+	defer l.RUnlock()
 
 	if c, ok := l.clients[w]; ok {
 		return c
@@ -41,15 +40,17 @@ func (l *list) Get(w Writer) Client {
 	return nil
 }
 
-func (l *list) Remove(w Writer) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
+func (l *Map) Remove(w Writer) {
+	l.Lock()
+	defer l.Unlock()
+
+	logger.Printlnf("<web-server> a client left :'(")
 	delete(l.clients, w)
 }
 
-func (l *list) Iterate(callback func(w Writer, c Client)) {
-	l.mux.RLock()
-	defer l.mux.RUnlock()
+func (l *Map) Iterate(callback func(w Writer, c *Client)) {
+	l.RLock()
+	defer l.RUnlock()
 
 	for w, c := range l.clients {
 		callback(w, c)

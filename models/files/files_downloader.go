@@ -17,12 +17,12 @@ const (
 	timeoutDuration = 5 * time.Second
 )
 
-type downloader struct {
+type Downloader struct {
 	awaitingMetafiles             map[string]*awaitingMetafile
 	downloadedMetafilesToFilename map[string]string
 	awaitingChunks                map[string]*awaitingChunk
 	currentDownloads              map[string]*fileBuilder
-	FileChan                      FileChan
+	FileChan                      StoredFileChan
 	mux                           sync.RWMutex
 }
 
@@ -56,16 +56,8 @@ type AddChunkOrMetaFileOutput struct {
 	FileIsBuilt      bool
 }
 
-type Downloader interface {
-	AddNewFile(filename, hash string) bool
-	AddChunkOrMetafile(hash string, data []byte) *AddChunkOrMetaFileOutput
-	SetTimeout(hash, destination string, callback func())
-
-	GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult
-}
-
-func NewFilesDownloader(activateChan bool) *downloader {
-	return &downloader{
+func NewFilesDownloader(activateChan bool) *Downloader {
+	return &Downloader{
 		awaitingMetafiles:             map[string]*awaitingMetafile{},
 		downloadedMetafilesToFilename: map[string]string{},
 		awaitingChunks:                map[string]*awaitingChunk{},
@@ -74,7 +66,7 @@ func NewFilesDownloader(activateChan bool) *downloader {
 	}
 }
 
-func (downloader *downloader) AddNewFile(filename, metafileHash string) bool {
+func (downloader *Downloader) AddNewFile(filename, metafileHash string) bool {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
 
@@ -82,7 +74,7 @@ func (downloader *downloader) AddNewFile(filename, metafileHash string) bool {
 		common.HandleAbort("already downloaded (or currently downloading) this file", nil)
 		return false
 	}
-	if _, err := os.Stat(nameToDownloadsPath(filename)); !os.IsNotExist(err) {
+	if _, err := os.Stat(downloadsPath + filename); !os.IsNotExist(err) {
 		common.HandleAbort(fmt.Sprintf("already a file named %s in %s", filename, downloadsPath), nil)
 		return false
 	}
@@ -93,7 +85,7 @@ func (downloader *downloader) AddNewFile(filename, metafileHash string) bool {
 	return true
 }
 
-func (downloader *downloader) getTimeout(hash, destination string) *timeouts.Timeout {
+func (downloader *Downloader) getTimeout(hash, destination string) *timeouts.Timeout {
 	var timeout *timeouts.Timeout
 	if awaitingMetafile, ok := downloader.awaitingMetafiles[hash]; ok {
 		timeout, ok = awaitingMetafile.timeouts[destination]
@@ -111,7 +103,7 @@ func (downloader *downloader) getTimeout(hash, destination string) *timeouts.Tim
 	return timeout
 }
 
-func (downloader *downloader) SetTimeout(hash, destination string, callback func()) {
+func (downloader *Downloader) SetTimeout(hash, destination string, callback func()) {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
 
@@ -121,7 +113,7 @@ func (downloader *downloader) SetTimeout(hash, destination string, callback func
 	}
 }
 
-func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) *AddChunkOrMetaFileOutput {
+func (downloader *Downloader) AddChunkOrMetafile(hash string, data []byte) *AddChunkOrMetaFileOutput {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
 
@@ -189,7 +181,7 @@ func (downloader *downloader) AddChunkOrMetafile(hash string, data []byte) *AddC
 	return &AddChunkOrMetaFileOutput{ChunkIndex: -1}
 }
 
-func (downloader *downloader) GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult {
+func (downloader *Downloader) GetAllSearchResults(keywords []string) []*packets_gossiper.SearchResult {
 	downloader.mux.RLock()
 	defer downloader.mux.RUnlock()
 

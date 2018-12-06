@@ -11,7 +11,6 @@ import (
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/peers"
 	"github.com/gregunz/Peerster/models/routing"
-	"github.com/gregunz/Peerster/models/updates"
 	"github.com/gregunz/Peerster/models/vector_clock"
 	"github.com/gregunz/Peerster/utils"
 	"net"
@@ -37,25 +36,19 @@ type Gossiper struct {
 	gossiperConn   *net.UDPConn
 	rTimerDuration time.Duration
 
-	Origin              string
-	GossipAddr          *peers.Address
-	ClientAddr          *peers.Address
-	GUIPort             uint
-	FromClientChan      chan *packets_client.ClientPacket
-	FromGossipChan      chan *GossipChannelElement
-	NodeChan            peers.NodeChan
-	RumorChan           vector_clock.RumorChan
-	OriginChan          routing.OriginChan
-	PrivateMsgChan      conv.PrivateMsgChan
-	PeersSet            *peers.Set
-	VectorClock         vector_clock.VectorClock
-	RoutingTable        routing.Table
-	Conversations       conv.Conversation
-	FilesUploader       files.Uploader
-	IndexedFilesChan    files.FileChan
-	FilesDownloader     files.Downloader
-	DownloadedFilesChan files.FileChan
-	FilesSearcher       files.Searcher
+	Origin          string
+	GossipAddr      *peers.Address
+	ClientAddr      *peers.Address
+	GUIPort         uint
+	FromClientChan  chan *packets_client.ClientPacket
+	FromGossipChan  chan *GossipChannelElement
+	PeersSet        *peers.Set
+	VectorClock     *vector_clock.VectorClock
+	RoutingTable    *routing.Table
+	Conversations   *conv.Conversations
+	FilesUploader   *files.Uploader
+	FilesDownloader *files.Downloader
+	FilesSearcher   *files.Searcher
 }
 
 func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.Set,
@@ -79,14 +72,13 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		return nil
 	}
 
-	updatesChannels := updates.NewChannels(guiEnabled)
-	peersSet.SetNodeChan(updatesChannels)
-	routingTable := routing.NewTable(name, updatesChannels)
-	vectorClock := vector_clock.NewVectorClock(updatesChannels)
-	conversations := conv.NewConversations(updatesChannels)
+	peersSet.SetNewNodeChan(guiEnabled)
+	routingTable := routing.NewTable(name, guiEnabled)
+	vectorClock := vector_clock.NewVectorClock(guiEnabled)
+	conversations := conv.NewConversations(guiEnabled)
 	uploader := files.NewFilesUploader(guiEnabled)
 	downloader := files.NewFilesDownloader(guiEnabled)
-	searcher := files.NewSearcher()
+	searcher := files.NewSearcher(guiEnabled)
 
 	return &Gossiper{
 		mode:           mode,
@@ -95,25 +87,19 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		gossiperConn:   peerConn,
 		rTimerDuration: time.Duration(rTimerDuration) * time.Second,
 
-		Origin:              name,
-		GossipAddr:          address,
-		ClientAddr:          clientAddr,
-		GUIPort:             guiPort,
-		FromClientChan:      make(chan *packets_client.ClientPacket), // bufferedChanSize),
-		FromGossipChan:      make(chan *GossipChannelElement),        // bufferedChanSize),
-		NodeChan:            updatesChannels,
-		RumorChan:           updatesChannels,
-		PrivateMsgChan:      updatesChannels,
-		OriginChan:          updatesChannels,
-		PeersSet:            peersSet,
-		VectorClock:         vectorClock,
-		RoutingTable:        routingTable,
-		Conversations:       conversations,
-		FilesUploader:       uploader,
-		IndexedFilesChan:    uploader.FileChan,
-		FilesDownloader:     downloader,
-		DownloadedFilesChan: downloader.FileChan,
-		FilesSearcher:       searcher,
+		Origin:          name,
+		GossipAddr:      address,
+		ClientAddr:      clientAddr,
+		GUIPort:         guiPort,
+		FromClientChan:  make(chan *packets_client.ClientPacket), // bufferedChanSize),
+		FromGossipChan:  make(chan *GossipChannelElement),        // bufferedChanSize),
+		PeersSet:        peersSet,
+		VectorClock:     vectorClock,
+		RoutingTable:    routingTable,
+		Conversations:   conversations,
+		FilesUploader:   uploader,
+		FilesDownloader: downloader,
+		FilesSearcher:   searcher,
 	}
 }
 

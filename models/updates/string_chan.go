@@ -2,23 +2,23 @@ package updates
 
 type StringChan interface {
 	Get() string
-	Push(filename string)
+	Push(s string)
 }
 
 type stringChan struct {
-	ch Chan
+	Chan
 }
 
 func NewStringChan(activated bool) StringChan {
-	return &stringChan{ch: NewChan(activated)}
+	return &stringChan{Chan: NewChan(activated)}
 }
 
 func (ch *stringChan) Push(s string) {
-	ch.ch.Push(s)
+	ch.Chan.Push(s)
 }
 
 func (ch *stringChan) Get() string {
-	s, ok := ch.ch.Get().(string)
+	s, ok := ch.Chan.Get().(string)
 	if !ok {
 		return ""
 	}

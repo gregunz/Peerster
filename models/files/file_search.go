@@ -16,14 +16,17 @@ type Search struct {
 	Keywords []string
 	Budget   uint64
 	matches  map[string]*SearchMatch
+	FileChan ReachableFileChan
+
 	sync.RWMutex
 }
 
-func newSearch(keywords []string, initialBudget uint64) *Search {
+func newSearch(keywords []string, initialBudget uint64, FileChan ReachableFileChan) *Search {
 	return &Search{
 		Keywords: keywords,
 		Budget:   initialBudget,
 		matches:  map[string]*SearchMatch{},
+		FileChan: FileChan,
 	}
 }
 
@@ -32,7 +35,7 @@ func (search *Search) DoubleBudget() bool {
 	defer search.Unlock()
 
 	if search.Budget < maxBudget {
-		search.Budget = utils.Min_uint64(search.Budget*2, maxBudget)
+		search.Budget = utils.Min(search.Budget*2, maxBudget)
 		return true
 	}
 	return false //cannot double Budget when reached `maxBudget`
@@ -50,12 +53,18 @@ func (search *Search) Ack(reply *packets_gossiper.SearchReply) {
 
 	for _, result := range reply.Results {
 		fileId := utils.HashToHex(result.MetafileHash)
-		if match, ok := search.matches[fileId]; ok {
-			match.Ack(reply.Origin, result)
-		} else {
+
+		var match *SearchMatch
+		var ok bool
+
+		if match, ok = search.matches[fileId]; !ok {
 			if utils.Match(result.FileName, search.Keywords) {
-				search.matches[fileId] = NewSearchMatch(reply.Origin, result)
+				match = NewSearchMatch(result)
+				search.matches[fileId] = match
 			}
+		}
+		if match.Ack(reply.Origin, result) {
+			search.FileChan.Push(match)
 		}
 	}
 }
@@ -71,6 +80,17 @@ func (search *Search) IsFull() bool {
 		}
 	}
 	return numFullMatches >= minNumFullMatches
+}
+
+func (search *Search) GetAllMatches() []*SearchMatch {
+	search.RLock()
+	defer search.RUnlock()
+
+	matches := []*SearchMatch{}
+	for _, m := range search.matches {
+		matches = append(matches, m)
+	}
+	return matches
 }
 
 func (search *Search) ToRequestFiles(filename, metahash string) []*packets_client.RequestFilePacket {

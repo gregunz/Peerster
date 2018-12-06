@@ -93,13 +93,14 @@ func (file *fileBuilder) Build() *FileType {
 		}
 		fileBytes = append(fileBytes, chunk...)
 	}
-	path := nameToDownloadsPath(file.name)
-	err := ioutil.WriteFile(path, fileBytes, 0644)
+	path := downloadsPath
+	filepath := path + file.name
+	err := ioutil.WriteFile(filepath, fileBytes, 0644)
 	if err != nil {
-		common.HandleAbort(fmt.Sprintf("cannot save file in %s", path), err)
+		common.HandleAbort(fmt.Sprintf("cannot save file in %s", filepath), err)
 		return nil
 	}
-	return NewFile(path)
+	return NewFile(file.name, path)
 }
 
 func (file *fileBuilder) ToSearchResult() *packets_gossiper.SearchResult {

@@ -21,7 +21,7 @@ func newConvHandler(origin string, privateMsgChan PrivateMsgChan) *convHandler {
 }
 
 func (handler *convHandler) save(msg *packets_gossiper.PrivateMessage) {
-	handler.privateMsgChan.AddPrivateMsg(msg)
+	handler.privateMsgChan.Push(msg)
 	handler.messages = append(handler.messages, msg)
 }
 

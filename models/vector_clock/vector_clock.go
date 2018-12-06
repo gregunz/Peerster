@@ -6,42 +6,36 @@ import (
 	"sync"
 )
 
-type vectorClock struct {
+type VectorClock struct {
 	handlers  map[string]*vectorClockHandler
-	rumorChan RumorChan
+	RumorChan RumorChan
 	mux       sync.Mutex
 }
 
-type VectorClock interface {
-	GetOrCreateHandler(origin string) *vectorClockHandler
-	ToStatusPacket() *packets_gossiper.StatusPacket
-	Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool)
-}
-
-func NewVectorClock(rumorChan RumorChan) *vectorClock {
-	return &vectorClock{
+func NewVectorClock(activateChan bool) *VectorClock {
+	return &VectorClock{
 		handlers:  map[string]*vectorClockHandler{},
-		rumorChan: rumorChan,
+		RumorChan: NewRumorChan(activateChan),
 	}
 }
 
-func (vector *vectorClock) getOrCreateHandler(origin string) *vectorClockHandler {
+func (vector *VectorClock) getOrCreateHandler(origin string) *vectorClockHandler {
 	h, ok := vector.handlers[origin]
 	if !ok {
-		h = newVectorClockHandler(origin, vector.rumorChan)
+		h = newVectorClockHandler(origin, vector.RumorChan)
 		vector.handlers[origin] = h
 	}
 	return h
 }
 
-func (vector *vectorClock) GetOrCreateHandler(origin string) *vectorClockHandler {
+func (vector *VectorClock) GetOrCreateHandler(origin string) *vectorClockHandler {
 	vector.mux.Lock()
 	defer vector.mux.Unlock()
 
 	return vector.getOrCreateHandler(origin)
 }
 
-func (vector *vectorClock) ToStatusPacket() *packets_gossiper.StatusPacket {
+func (vector *VectorClock) ToStatusPacket() *packets_gossiper.StatusPacket {
 	vector.mux.Lock()
 	defer vector.mux.Unlock()
 
@@ -54,7 +48,7 @@ func (vector *vectorClock) ToStatusPacket() *packets_gossiper.StatusPacket {
 	}
 }
 
-func (vector *vectorClock) Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool) {
+func (vector *VectorClock) Compare(statusMap map[string]uint32) (*packets_gossiper.RumorMessage, bool) {
 	vector.mux.Lock()
 	defer vector.mux.Unlock()
 

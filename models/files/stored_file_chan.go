@@ -2,25 +2,25 @@ package files
 
 import "github.com/gregunz/Peerster/models/updates"
 
-type FileChan interface {
+type StoredFileChan interface {
 	Get() *FileType
 	Push(file *FileType)
 }
 
 type fileChan struct {
-	ch updates.Chan
+	updates.Chan
 }
 
-func NewFileChan(activated bool) FileChan {
-	return &fileChan{ch: updates.NewChan(activated)}
+func NewFileChan(activated bool) StoredFileChan {
+	return &fileChan{Chan: updates.NewChan(activated)}
 }
 
 func (ch *fileChan) Push(file *FileType) {
-	ch.ch.Push(file)
+	ch.Chan.Push(file)
 }
 
 func (ch *fileChan) Get() *FileType {
-	file, ok := ch.ch.Get().(*FileType)
+	file, ok := ch.Chan.Get().(*FileType)
 	if !ok {
 		return nil
 	}

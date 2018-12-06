@@ -5,34 +5,30 @@ import (
 	"sync"
 )
 
-type Searcher interface {
-	Search(keywords []string, initialBudget uint64) *Search
-	Ack(reply *packets_gossiper.SearchReply)
-	GetFullSearches() []*Search
-}
-
-type searcher struct {
-	searches map[*Search]bool
+type Searcher struct {
+	searches  map[*Search]bool
+	MatchChan ReachableFileChan
 
 	sync.RWMutex
 }
 
-func NewSearcher() *searcher {
-	return &searcher{
-		searches: map[*Search]bool{},
+func NewSearcher(activateChan bool) *Searcher {
+	return &Searcher{
+		searches:  map[*Search]bool{},
+		MatchChan: NewMatchChan(activateChan),
 	}
 }
 
-func (searcher *searcher) Search(keywords []string, initialBudget uint64) *Search {
+func (searcher *Searcher) Search(keywords []string, initialBudget uint64) *Search {
 	searcher.Lock()
 	defer searcher.Unlock()
 
-	newSearch := newSearch(keywords, initialBudget)
+	newSearch := newSearch(keywords, initialBudget, searcher.MatchChan)
 	searcher.searches[newSearch] = true
 	return newSearch
 }
 
-func (searcher *searcher) Ack(reply *packets_gossiper.SearchReply) {
+func (searcher *Searcher) Ack(reply *packets_gossiper.SearchReply) {
 	searcher.RLock()
 	defer searcher.RUnlock()
 
@@ -41,7 +37,18 @@ func (searcher *searcher) Ack(reply *packets_gossiper.SearchReply) {
 	}
 }
 
-func (searcher *searcher) GetFullSearches() []*Search {
+func (searcher *Searcher) GetAllSearches() []*Search {
+	searcher.RLock()
+	defer searcher.RUnlock()
+
+	searches := []*Search{}
+	for s := range searcher.searches {
+		searches = append(searches, s)
+	}
+	return searches
+}
+
+func (searcher *Searcher) GetFullSearches() []*Search {
 	searcher.RLock()
 	defer searcher.RUnlock()
 

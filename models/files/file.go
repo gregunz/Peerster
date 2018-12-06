@@ -8,7 +8,6 @@ import (
 	"github.com/gregunz/Peerster/utils"
 	"io/ioutil"
 	"math"
-	"path/filepath"
 )
 
 const (
@@ -21,34 +20,28 @@ const (
 
 type FileType struct {
 	Name     string
-	Size     int
+	Path     string
+	Size     uint64
 	Hashes   []string // list of chunk hashes
 	MetaFile []byte
 	MetaHash string // hash of metafile
 }
 
-func nameToSharedPath(name string) string {
-	return sharedPath + name
-}
-
-func nameToDownloadsPath(name string) string {
-	return downloadsPath + name
-}
-
-func NewFile(path string) *FileType {
-	fileBytes, err := ioutil.ReadFile(path)
+func NewFile(filename string, path string) *FileType {
+	filepath := path + filename
+	fileBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
-		common.HandleAbort(fmt.Sprintf("could not read %s", path), err)
+		common.HandleAbort(fmt.Sprintf("could not read %s", filepath), err)
 		return nil
 	}
 
-	fileSize := len(fileBytes)
+	fileSize := uint64(len(fileBytes))
 	nChunks := int(math.Ceil(float64(fileSize) / ChunkSize))
 	metafile := []byte{}
 	hashes := []string{}
 	for i := 0; i < nChunks; i++ {
 		from := i * ChunkSize
-		to := utils.Min((i+1)*ChunkSize, fileSize)
+		to := utils.Min(uint64(i+1)*ChunkSize, fileSize)
 		hash := sha256.Sum256(fileBytes[from:to])
 		hashes = append(hashes, utils.HashToHex(hash[:]))
 		metafile = append(metafile, hash[:]...)
@@ -57,12 +50,17 @@ func NewFile(path string) *FileType {
 	metaHash := sha256.Sum256(metafile)
 
 	return &FileType{
-		Name:     filepath.Base(path),
+		Name:     filename,
+		Path:     path,
 		Size:     fileSize,
 		Hashes:   hashes,
 		MetaFile: metafile,
 		MetaHash: utils.HashToHex(metaHash[:]),
 	}
+}
+
+func (file *FileType) FilePath() string {
+	return file.Path + file.Name
 }
 
 func (file *FileType) GetChunkOrMetafile(hash string) ([]byte, error) {
@@ -72,15 +70,15 @@ func (file *FileType) GetChunkOrMetafile(hash string) ([]byte, error) {
 	for i, h := range file.Hashes {
 		if h == hash {
 			from := i * ChunkSize
-			to := utils.Min((i+1)*ChunkSize, file.Size)
-			fileBytes, err := ioutil.ReadFile(nameToSharedPath(file.Name))
+			to := utils.Min(uint64(i+1)*ChunkSize, file.Size)
+			fileBytes, err := ioutil.ReadFile(file.FilePath())
 			if err != nil {
 				return nil, err
 			}
 			return fileBytes[from:to], nil
 		}
 	}
-	return nil, fmt.Errorf("no chunks with corresponding hash %s in file %s", hash, file.Name)
+	return nil, fmt.Errorf("no chunks with corresponding hash %s in file %s", hash, file.FilePath())
 }
 
 func (file *FileType) ToSearchResult() *packets_gossiper.SearchResult {

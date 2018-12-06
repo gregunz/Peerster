@@ -11,13 +11,14 @@ import (
 
 type Set struct {
 	peersMap map[string]*Peer
-	nodeChan NodeChan
+	NodeChan NodeChan
 	mux      sync.Mutex
 }
 
 func NewSet(peers ...*Peer) *Set {
 	newPeersSet := &Set{
 		peersMap: map[string]*Peer{},
+		NodeChan: NewNodeChan(false),
 	}
 	for _, p := range peers {
 		newPeersSet.add(p)
@@ -25,11 +26,11 @@ func NewSet(peers ...*Peer) *Set {
 	return newPeersSet
 }
 
-func (set *Set) SetNodeChan(nodeChan NodeChan) {
+func (set *Set) SetNewNodeChan(activate bool) {
 	set.mux.Lock()
 	defer set.mux.Unlock()
 
-	set.nodeChan = nodeChan
+	set.NodeChan = NewNodeChan(activate)
 }
 
 func (set *Set) string() string {
@@ -92,9 +93,7 @@ func (set *Set) add(peer *Peer) {
 		// not overwriting if peer already present
 		common.HandleError(fmt.Errorf("adding a Peer that is already in PeerSet"))
 	} else {
-		if set.nodeChan != nil {
-			set.nodeChan.AddNode(peer)
-		}
+		set.NodeChan.Push(peer)
 		set.peersMap[peer.ID()] = peer
 	}
 }

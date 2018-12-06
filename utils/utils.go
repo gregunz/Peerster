@@ -12,14 +12,7 @@ func FlipCoin() bool {
 	return (rand.Int() % 2) == 0
 }
 
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func Min_uint64(a, b uint64) uint64 {
+func Min(a, b uint64) uint64 {
 	if a < b {
 		return a
 	}

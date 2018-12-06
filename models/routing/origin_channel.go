@@ -1,6 +1,6 @@
 package routing
 
 type OriginChan interface {
-	AddOrigin(string)
-	GetOrigin() string
+	Get() string
+	Push(origin string)
 }

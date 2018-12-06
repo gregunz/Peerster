@@ -15,6 +15,7 @@ type ClientResponse struct {
 	Contact        *ContactResponse                 `json:"contact"`
 	IndexedFile    *FileResponse                    `json:"indexed-file"`
 	DownloadedFile *FileResponse                    `json:"downloaded-file"`
+	SearchedFile   *FileResponse                    `json:"searched-file"`
 }
 
 func NewGetIdResponse(id string, policy *bluemonday.Policy) *ClientResponse {
@@ -65,6 +66,16 @@ func NewDownloadedFileResponse(file *files.FileType, policy *bluemonday.Policy) 
 			Filename: policy.Sanitize(file.Name),
 			MetaHash: policy.Sanitize(file.MetaHash),
 			Size:     file.Size,
+		},
+	}
+}
+
+func NewSearchedFileResponse(metadata *files.SearchMetadata, policy *bluemonday.Policy) *ClientResponse {
+	return &ClientResponse{
+		SearchedFile: &FileResponse{
+			Filename: policy.Sanitize(metadata.Filename),
+			MetaHash: policy.Sanitize(metadata.MetaHash),
+			Size:     metadata.NumOfChunks * files.ChunkSize,
 		},
 	}
 }

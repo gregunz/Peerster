@@ -8,39 +8,32 @@ import (
 	"sync"
 )
 
-type uploader struct {
+type Uploader struct {
 	filenameToFile map[string]*FileType
 	chunksToFile   map[string]*FileType
-	FileChan       FileChan
+	FileChan       StoredFileChan
 	mux            sync.Mutex
 }
 
-type Uploader interface {
-	IndexFile(filename string, sharedPath bool)
-	HasChunk(chunkHash []byte) bool
-	GetData(chunkHash []byte) []byte
-	GetAllFiles() []*FileType
-}
-
-func NewFilesUploader(activateChan bool) *uploader {
-	return &uploader{
+func NewFilesUploader(activateChan bool) *Uploader {
+	return &Uploader{
 		filenameToFile: map[string]*FileType{},
 		chunksToFile:   map[string]*FileType{},
 		FileChan:       NewFileChan(activateChan),
 	}
 }
 
-func (uploader *uploader) IndexFile(filename string, sharedPath bool) {
+func (uploader *Uploader) IndexFile(filename string, isSharedPath bool) {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
-	var filepath string
-	if sharedPath {
-		filepath = nameToSharedPath(filename)
+	var path string
+	if isSharedPath {
+		path = sharedPath
 	} else {
-		filepath = nameToDownloadsPath(filename)
+		path = downloadsPath
 	}
-	file := NewFile(filepath)
+	file := NewFile(filename, path)
 	if file == nil {
 		return
 	}
@@ -61,7 +54,7 @@ func (uploader *uploader) IndexFile(filename string, sharedPath bool) {
 	}
 }
 
-func (uploader *uploader) GetAllFiles() []*FileType {
+func (uploader *Uploader) GetAllFiles() []*FileType {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
@@ -72,7 +65,7 @@ func (uploader *uploader) GetAllFiles() []*FileType {
 	return files
 }
 
-func (uploader *uploader) HasChunk(chunkHash []byte) bool {
+func (uploader *Uploader) HasChunk(chunkHash []byte) bool {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
@@ -81,7 +74,7 @@ func (uploader *uploader) HasChunk(chunkHash []byte) bool {
 	return ok
 }
 
-func (uploader *uploader) GetData(chunkHash []byte) []byte {
+func (uploader *Uploader) GetData(chunkHash []byte) []byte {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 

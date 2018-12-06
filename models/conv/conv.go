@@ -5,48 +5,43 @@ import (
 	"sync"
 )
 
-type conversations struct {
+type Conversations struct {
 	handlers       map[string]*convHandler
-	privateMsgChan PrivateMsgChan
+	PrivateMsgChan PrivateMsgChan
 	mux            sync.Mutex
 }
 
-type Conversation interface {
-	GetOrCreateHandler(origin string) *convHandler
-	GetAll() []*packets_gossiper.PrivateMessage
-}
-
-func NewConversations(privateMsgChan PrivateMsgChan) *conversations {
-	return &conversations{
+func NewConversations(activateChan bool) *Conversations {
+	return &Conversations{
 		handlers:       map[string]*convHandler{},
-		privateMsgChan: privateMsgChan,
+		PrivateMsgChan: NewPrivateChan(activateChan),
 	}
 }
 
-func (conv *conversations) getOrCreateHandler(origin string) *convHandler {
+func (conv *Conversations) getOrCreateHandler(origin string) *convHandler {
 	h, ok := conv.handlers[origin]
 	if !ok {
-		h = newConvHandler(origin, conv.privateMsgChan)
+		h = newConvHandler(origin, conv.PrivateMsgChan)
 		conv.handlers[origin] = h
 	}
 	return h
 }
 
-func (conv *conversations) GetOrCreateHandler(origin string) *convHandler {
+func (conv *Conversations) GetOrCreateHandler(origin string) *convHandler {
 	conv.mux.Lock()
 	defer conv.mux.Unlock()
 
 	return conv.getOrCreateHandler(origin)
 }
 
-func (conv *conversations) GetAllOf(origin string) []*packets_gossiper.PrivateMessage {
+func (conv *Conversations) GetAllOf(origin string) []*packets_gossiper.PrivateMessage {
 	conv.mux.Lock()
 	defer conv.mux.Unlock()
 
 	return conv.getOrCreateHandler(origin).GetAll()
 }
 
-func (conv *conversations) GetAll() []*packets_gossiper.PrivateMessage {
+func (conv *Conversations) GetAll() []*packets_gossiper.PrivateMessage {
 	conv.mux.Lock()
 	defer conv.mux.Unlock()
 
