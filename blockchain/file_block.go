@@ -17,6 +17,11 @@ type FileBlock struct {
 	sync.RWMutex
 }
 
+func (fb *FileBlock) txIsValidWithThisBlock(newTx *Tx) bool {
+	_, ok := fb.transactions[newTx.id]
+	return !ok //is valid if not yet present
+}
+
 func (fb *FileBlock) ToBlock(hopLimit uint32) *packets_gossiper.Block {
 	fb.RLock()
 	defer fb.RUnlock()

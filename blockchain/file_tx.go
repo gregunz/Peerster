@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
-	"github.com/gregunz/Peerster/utils"
 )
 
 type Tx struct {
@@ -11,9 +10,9 @@ type Tx struct {
 }
 
 func NewTx(publish packets_gossiper.TxPublish) *Tx {
-	hash := publish.File.Hash()
+	//hash := publish.File.Hash()
 	return &Tx{
-		id:   utils.HashToHex(hash[:]),
+		id:   publish.File.Name,
 		File: publish.File,
 	}
 }

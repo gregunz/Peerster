@@ -19,22 +19,3 @@ func (block *Block) String() string {
 	return fmt.Sprintf("BLOCK with previous hash %s nonce %s and transactions <%s>",
 		utils.HashToHex(block.PrevHash[:]), utils.HashToHex(block.Nonce[:]), transactions)
 }
-
-/*
-func (block *Block) Hash() (out [32]byte) {
-	h := sha256.New()
-	h.Write(block.PrevHash[:])
-	h.Write(block.Nonce[:])
-	err := binary.Write(h, binary.LittleEndian, uint32(len(block.Transactions)))
-	if err != nil {
-		common.HandleAbort("unexpected error when computing hash of block", err)
-		return
-	}
-	for _, t := range block.Transactions {
-		th := t.File.Hash()
-		h.Write(th[:])
-	}
-	copy(out[:], h.Sum(nil))
-	return
-}
-*/

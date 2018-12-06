@@ -51,7 +51,7 @@ func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
 		previousBlock = singleBlock
 	} else if utils.AllZero(block.PrevHash[:]) {
 		// new fork but without tail ??? should I care ?
-		//TODO
+		//Todo: do better but for now we don't take it
 		return false
 	} else {
 		// same as above ?
@@ -67,19 +67,13 @@ func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
 	}
 }
 
-func (bcf *BCF) MineOnce(block *packets_gossiper.Block) bool {
+func (bcf *BCF) MineOnce(block *packets_gossiper.Block) (*FileBlock, error) {
 	bcf.Lock()
 	defer bcf.Unlock()
 
 	nonce := utils.Random32Bytes()
 	bcf.head.SetNonce(nonce)
-	if fb, err := bcf.head.Build(); err != nil {
-		//common.HandleAbort("MineOnce failed", err)
-		// no need to print error, mining correct block happens quite rarely!
-		return false
-	} else {
-		return bcf.addFileBlock(fb)
-	}
+	return bcf.head.Build()
 }
 
 // private functions without locks

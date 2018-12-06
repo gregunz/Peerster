@@ -58,15 +58,16 @@ func (fbb *FileBlockBuilder) SetBlockAndBuild(block *packets_gossiper.Block) (*F
 	fbb.Lock()
 	defer fbb.Unlock()
 
+	if fbb.previous != nil && fbb.previous.hash != block.PrevHash {
+		return nil, fmt.Errorf("trying to add a block over a mismatching previous file-block")
+	}
+
 	fbb.transactions = map[string]*Tx{} // clear previous entries in transactions if they were some
 	for _, txPublish := range block.Transactions {
 		tx := NewTx(txPublish)
 		if !fbb.addTxIfValid(tx) { // one tx contradicts another
 			return nil, fmt.Errorf("one tx (%s) contradicts another previous tx", tx.File.String())
 		}
-	}
-	if fbb.previous != nil && fbb.previous.hash != block.PrevHash {
-		return nil, fmt.Errorf("trying to add a block over a mismatching previous file-block")
 	}
 	fbb.prevHash = block.PrevHash // in case previous is nil when computing hash (prevHash needed)
 	fbb.nonce = block.Nonce
@@ -121,19 +122,14 @@ func (fbb *FileBlockBuilder) Hash() (out [32]byte) {
 // private functions without locks
 
 func (fbb *FileBlockBuilder) addTxIfValid(newTx *Tx) bool {
-	for _, blockTx := range fbb.transactions {
-		if !blockTx.IsValid(newTx) {
-			return false
-		}
+	if _, ok := fbb.transactions[newTx.id]; ok {
+		return false
 	}
 	prevBlock := fbb.previous
 	for prevBlock != nil {
-		for _, prevBlockTx := range prevBlock.transactions {
-			if !prevBlockTx.IsValid(newTx) {
-				return false
-			}
+		if !prevBlock.txIsValidWithThisBlock(newTx) {
+			return false
 		}
-		prevBlock = prevBlock.previous
 	}
 	fbb.transactions[newTx.id] = newTx
 	return true
