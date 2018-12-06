@@ -97,6 +97,7 @@ func (server *WebServer) Start(group sync.WaitGroup) {
 }
 
 func (server *WebServer) handleClientPacket(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		elem, ok := <-server.clientChan
 		if ok {
@@ -107,10 +108,10 @@ func (server *WebServer) handleClientPacket(group sync.WaitGroup) {
 			go server.handlePacket(elem.Packet, elem.Writer, false)
 		}
 	}
-	group.Done()
 }
 
 func (server *WebServer) handleRumorSubscriptions(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		msg := server.gossiper.RumorChan.GetRumor()
 		if msg != nil {
@@ -122,10 +123,10 @@ func (server *WebServer) handleRumorSubscriptions(group sync.WaitGroup) {
 			})
 		}
 	}
-	group.Done()
 }
 
 func (server *WebServer) handlePrivateSubscriptions(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		msg := server.gossiper.PrivateMsgChan.GetPrivateMsg()
 		if msg != nil {
@@ -136,10 +137,10 @@ func (server *WebServer) handlePrivateSubscriptions(group sync.WaitGroup) {
 			})
 		}
 	}
-	group.Done()
 }
 
 func (server *WebServer) handleNodeSubscriptions(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		peer := server.gossiper.NodeChan.GetNode()
 		if peer != nil {
@@ -150,10 +151,10 @@ func (server *WebServer) handleNodeSubscriptions(group sync.WaitGroup) {
 			})
 		}
 	}
-	group.Done()
 }
 
 func (server *WebServer) handleOriginsSubscriptions(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		o := server.gossiper.OriginChan.GetOrigin()
 		if o != "" && o != server.gossiper.Origin {
@@ -164,10 +165,10 @@ func (server *WebServer) handleOriginsSubscriptions(group sync.WaitGroup) {
 			})
 		}
 	}
-	group.Done()
 }
 
 func (server *WebServer) handleIndexedFilesSubscriptions(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		file := server.gossiper.IndexedFilesChan.Get()
 		if file != nil {
@@ -178,9 +179,9 @@ func (server *WebServer) handleIndexedFilesSubscriptions(group sync.WaitGroup) {
 			})
 		}
 	}
-	group.Done()
 }
 func (server *WebServer) handleDownloadedFilesSubscriptions(group sync.WaitGroup) {
+	defer group.Done()
 	for {
 		file := server.gossiper.DownloadedFilesChan.Get()
 		if file != nil {
@@ -192,7 +193,6 @@ func (server *WebServer) handleDownloadedFilesSubscriptions(group sync.WaitGroup
 			})
 		}
 	}
-	group.Done()
 }
 
 func (server *WebServer) handleSubscriptionPacket(packet *packets_client.SubscribePacket, client clients.Client, sub subscription.Sub) bool {
