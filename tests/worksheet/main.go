@@ -6,8 +6,14 @@ import (
 )
 
 func main() {
-	d := utils.Distributor(32, 3)
-	for i := 0; i < 10; i++ {
-		logger.Printlnf("%d", d())
-	}
+	/*
+		d := utils.Distributor(32, 3)
+		for i := 0; i < 10; i++ {
+			logger.Printlnf("%d", d())
+		}
+	*/
+
+	logger.Printlnf("%x", utils.Random32Bytes())
+	logger.Printlnf("%x", utils.Random32Bytes())
+	logger.Printlnf("%x", utils.Random32Bytes())
 }

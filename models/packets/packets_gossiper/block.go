@@ -1,10 +1,7 @@
 package packets_gossiper
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
-	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/utils"
 )
 
@@ -23,6 +20,7 @@ func (block *Block) String() string {
 		utils.HashToHex(block.PrevHash[:]), utils.HashToHex(block.Nonce[:]), transactions)
 }
 
+/*
 func (block *Block) Hash() (out [32]byte) {
 	h := sha256.New()
 	h.Write(block.PrevHash[:])
@@ -33,9 +31,10 @@ func (block *Block) Hash() (out [32]byte) {
 		return
 	}
 	for _, t := range block.Transactions {
-		th := t.Hash()
+		th := t.File.Hash()
 		h.Write(th[:])
 	}
 	copy(out[:], h.Sum(nil))
 	return
 }
+*/
