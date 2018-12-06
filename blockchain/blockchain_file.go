@@ -93,7 +93,7 @@ func (bcf *BCF) addFileBlock(fb *FileBlock) bool {
 		if fb.length > bcf.headLength { // even the longest fork now! changing head!
 			// we need to keep the transactions that are not invalidated nor included in the new block
 			newHead := NewFileBlockBuilder(fb)
-			for _, tx := range bcf.head.transactions {
+			for _, tx := range bcf.head.newTransactions {
 				newHead.AddTxIfValid(tx)
 			}
 			bcf.headLength = fb.length //not new head which is 1 greater

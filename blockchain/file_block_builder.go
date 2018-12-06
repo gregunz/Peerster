@@ -17,10 +17,11 @@ const (
 type FileBlockBuilder struct {
 	length int
 
-	previous     *FileBlock
-	prevHash     [32]byte // needed only if previous is nil
-	nonce        [32]byte
-	transactions map[string]*Tx
+	previous         *FileBlock
+	prevHash         [32]byte // needed only if previous is nil
+	nonce            [32]byte
+	newTransactions  map[string]*Tx
+	pastTransactions map[string]*Tx
 
 	sync.RWMutex
 }
@@ -32,10 +33,17 @@ func NewFileBlockBuilder(previousBlock *FileBlock) *FileBlockBuilder {
 		previous: previousBlock,
 		prevHash: [32]byte{},
 		//nonce:            [32]byte{},
-		transactions: map[string]*Tx{},
+		newTransactions:  map[string]*Tx{},
+		pastTransactions: map[string]*Tx{},
 	}
 	if previousBlock != nil {
 		fbb.length = previousBlock.length + 1
+	}
+	for previousBlock != nil {
+		for _, tx := range previousBlock.transactions {
+			fbb.pastTransactions[tx.id] = tx
+		}
+		previousBlock = previousBlock.previous
 	}
 	return fbb
 }
@@ -62,7 +70,7 @@ func (fbb *FileBlockBuilder) SetBlockAndBuild(block *packets_gossiper.Block) (*F
 		return nil, fmt.Errorf("trying to add a block over a mismatching previous file-block")
 	}
 
-	fbb.transactions = map[string]*Tx{} // clear previous entries in transactions if they were some
+	fbb.newTransactions = map[string]*Tx{} // clear previous entries in transactions if they were some
 	for _, txPublish := range block.Transactions {
 		tx := NewTx(txPublish)
 		if !fbb.addTxIfValid(tx) { // one tx contradicts another
@@ -90,7 +98,7 @@ func (fbb *FileBlockBuilder) Build() (*FileBlock, error) {
 		previous:     fbb.previous,
 		hash:         hash,
 		nonce:        fbb.nonce,
-		transactions: fbb.transactions,
+		transactions: fbb.newTransactions,
 	}, nil
 }
 
@@ -106,12 +114,12 @@ func (fbb *FileBlockBuilder) Hash() (out [32]byte) {
 	h := sha256.New()
 	h.Write(previousHash[:])
 	h.Write(fbb.nonce[:])
-	err := binary.Write(h, binary.LittleEndian, uint32(len(fbb.transactions)))
+	err := binary.Write(h, binary.LittleEndian, uint32(len(fbb.newTransactions)))
 	if err != nil {
 		common.HandleAbort("unexpected error when computing hash of block", err)
 		return
 	}
-	for _, t := range fbb.transactions {
+	for _, t := range fbb.newTransactions {
 		th := t.File.Hash()
 		h.Write(th[:])
 	}
@@ -122,15 +130,12 @@ func (fbb *FileBlockBuilder) Hash() (out [32]byte) {
 // private functions without locks
 
 func (fbb *FileBlockBuilder) addTxIfValid(newTx *Tx) bool {
-	if _, ok := fbb.transactions[newTx.id]; ok {
+	if _, ok := fbb.pastTransactions[newTx.id]; ok {
 		return false
 	}
-	prevBlock := fbb.previous
-	for prevBlock != nil {
-		if !prevBlock.txIsValidWithThisBlock(newTx) {
-			return false
-		}
+	if _, ok := fbb.newTransactions[newTx.id]; ok {
+		return false
 	}
-	fbb.transactions[newTx.id] = newTx
+	fbb.newTransactions[newTx.id] = newTx
 	return true
 }
