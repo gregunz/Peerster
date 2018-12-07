@@ -4,8 +4,8 @@
     <div class="row">
 
       <div class="col s12">
-        <h4 v-if="title">{{title}}</h4>
-        <h4 v-if="dest">Private chat with <chip :name="dest"></chip></h4>
+        <h5 v-if="title">{{title}}</h5>
+        <h5 v-if="dest">Private chat with <chip :name="dest"></chip></h5>
       </div>
 
       <div class="col s12">

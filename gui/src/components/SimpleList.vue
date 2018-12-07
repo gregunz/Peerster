@@ -1,8 +1,8 @@
 <template>
-    <div class="row" v-if="">
+    <div class="row">
 
-      <div v-if="title" class="input-field col s12">
-        <h4>{{title}}</h4>
+      <div v-if="title" class="col s12">
+        <h5>{{title}}</h5>
       </div>
 
       <div class="col s12">

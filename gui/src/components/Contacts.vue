@@ -2,7 +2,7 @@
   <div class="contacts-component row">
 
     <div class="col s12">
-      <h4>Contacts</h4>
+      <h5>Contacts</h5>
     </div>
 
     <div class="col s12">
