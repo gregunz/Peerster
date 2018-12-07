@@ -26,6 +26,7 @@ func (table *Table) getOrCreateHandler(origin string) *tableHandler {
 	}
 	h, ok := table.handlers[origin]
 	if !ok {
+		table.OriginChan.Push(origin)
 		h = newRoutingTableHandler(origin)
 		table.handlers[origin] = h
 	}

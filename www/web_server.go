@@ -205,13 +205,11 @@ func (server *WebServer) handleDownloadedFilesSubscriptions(group sync.WaitGroup
 func (server *WebServer) handleSearchedFilesSubscriptions(group sync.WaitGroup) {
 	defer group.Done()
 	for {
-		match := server.gossiper.FilesSearcher.MatchChan.Get()
-		if match != nil {
+		metadata := server.gossiper.FilesSearcher.MatchChan.Get()
+		if metadata != nil {
 			server.clients.Iterate(func(w clients.Writer, c *clients.Client) {
 				if c.IsSubscribedTo(subscription.File) {
-					for _, metadata := range match.ToSearchMetadata() {
-						common.HandleError(w.WriteJSON(responses_client.NewSearchedFileResponse(metadata, server.policy)))
-					}
+					common.HandleError(w.WriteJSON(responses_client.NewSearchedFileResponse(metadata, server.policy)))
 				}
 			})
 		}
@@ -252,9 +250,6 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w cli
 	}
 	if packet.IsPostMessage() {
 		go func() { server.gossiper.FromClientChan <- packet.PostMessage.ToClientPacket() }()
-		if isRest {
-			common.HandleError(w.WriteJSON(nil))
-		}
 		return
 	}
 	if packet.IsPostNode() {
@@ -266,25 +261,21 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w cli
 		} else {
 			common.HandleAbort("cannot add node", nil)
 		}
-		if isRest {
-			common.HandleError(w.WriteJSON(nil))
-		}
 		return
 	}
 
 	if packet.IsIndexFile() {
 		go func() { server.gossiper.FromClientChan <- packet.IndexFile.ToClientPacket() }()
-		if isRest {
-			common.HandleError(w.WriteJSON(nil))
-		}
 		return
 	}
 
 	if packet.IsRequestFile() {
 		go func() { server.gossiper.FromClientChan <- packet.RequestFile.ToClientPacket() }()
-		if isRest {
-			common.HandleError(w.WriteJSON(nil))
-		}
+		return
+	}
+
+	if packet.IsSearchFiles() {
+		go func() { server.gossiper.FromClientChan <- packet.SearchFiles.ToClientPacket() }()
 		return
 	}
 
@@ -307,7 +298,6 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w cli
 		}
 		return
 	}
-
 	if packet.IsSubscribeOrigin() && !isRest {
 		if server.handleSubscriptionPacket(packet.SubscribeOrigin, client, subscription.Origin) {
 			for _, o := range server.gossiper.RoutingTable.GetOrigins() {
@@ -318,7 +308,6 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w cli
 		}
 		return
 	}
-
 	if packet.IsSubscribeFile() && !isRest {
 		if server.handleSubscriptionPacket(packet.SubscribeFile, client, subscription.File) {
 			for _, file := range server.gossiper.FilesUploader.GetAllFiles() {
@@ -328,14 +317,12 @@ func (server *WebServer) handlePacket(packet *packets_client.ClientPacket, w cli
 				common.HandleError(w.WriteJSON(responses_client.NewDownloadedFileResponse(filename, server.policy)))
 			}
 
-			for _, search := range server.gossiper.FilesSearcher.GetAllSearches() {
-				for _, match := range search.GetAllMatches() {
-					for _, metadata := range match.ToSearchMetadata() {
-						common.HandleError(w.WriteJSON(responses_client.NewSearchedFileResponse(metadata, server.policy)))
-					}
-				}
+			for _, metadata := range server.gossiper.FilesSearcher.GetAllMetadata() {
+				common.HandleError(w.WriteJSON(responses_client.NewSearchedFileResponse(metadata, server.policy)))
+
 			}
 		}
+		return
 	}
 
 	common.HandleAbort("an unexpected event occurred while handling ClientPacket", nil)

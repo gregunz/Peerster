@@ -70,9 +70,12 @@ func (downloader *Downloader) AddNewFile(filename, metafileHash string) bool {
 	downloader.mux.Lock()
 	defer downloader.mux.Unlock()
 
-	if _, ok := downloader.downloadedMetafilesToFilename[metafileHash]; ok {
-		common.HandleAbort("already downloaded (or currently downloading) this file", nil)
-		return false
+	if otherFilename, ok := downloader.downloadedMetafilesToFilename[metafileHash]; ok {
+		if otherFilename != filename {
+			common.HandleAbort(fmt.Sprintf("already downloaded (or currently downloading) "+
+				"this file but previously named %s", otherFilename), nil)
+			return false
+		}
 	}
 	if _, err := os.Stat(downloadsPath + filename); !os.IsNotExist(err) {
 		common.HandleAbort(fmt.Sprintf("already a file named %s in %s", filename, downloadsPath), nil)

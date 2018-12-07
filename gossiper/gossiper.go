@@ -14,6 +14,7 @@ import (
 	"github.com/gregunz/Peerster/models/vector_clock"
 	"github.com/gregunz/Peerster/utils"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -251,13 +252,12 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 		if packet.RequestFile.Destination != "" { // download file from node (hw02)
 			g.downloadHandler(packet.RequestFile)
 		} else { // download a searched file (hw03)
-			for _, search := range g.FilesSearcher.GetFullSearches() {
-				if search.IsFull() {
-					// let's download the file now from all origins involved
-					for _, requestFile := range search.ToRequestFiles(packet.RequestFile.Filename, packet.RequestFile.Request) {
-						g.downloadHandler(requestFile)
-					}
+			for _, search := range g.FilesSearcher.GetAllSearches() {
+				// let's download the file now from all origins involved
+				for _, requestFile := range search.ToRequestFiles(packet.RequestFile.Filename, packet.RequestFile.Request) {
+					g.downloadHandler(requestFile)
 				}
+
 			}
 		}
 	} else if packet.IsIndexFile() {
@@ -269,17 +269,16 @@ func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
 
 func (g *Gossiper) downloadHandler(requestFile *packets_client.RequestFilePacket) {
 	// not checking if can download because it does not enable downloading from different origins yet
-	//canDownload :=
-	g.FilesDownloader.AddNewFile(requestFile.Filename, requestFile.Request)
-	//if canDownload {
-	request := &packets_gossiper.DataRequest{
-		Origin:      g.Origin,
-		Destination: requestFile.Destination,
-		HopLimit:    hopLimit,
-		HashValue:   utils.HexToHash(requestFile.Request),
+	canDownload := g.FilesDownloader.AddNewFile(requestFile.Filename, requestFile.Request)
+	if canDownload {
+		request := &packets_gossiper.DataRequest{
+			Origin:      g.Origin,
+			Destination: requestFile.Destination,
+			HopLimit:    hopLimit,
+			HashValue:   utils.HexToHash(requestFile.Request),
+		}
+		g.transmit(request, false)
 	}
-	g.transmit(request, false)
-	//}
 }
 
 func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
@@ -295,13 +294,11 @@ func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
 	for range searchTicker.C {
 
 		if search.IsFull() || !search.DoubleBudget() {
-			logger.Printlnf("STOPPING SEARCH")
+			logger.Printlnf("SEARCH with keywords %s STOPPED with budget %d",
+				strings.Join(search.Keywords, ","), search.Budget)
 			searchTicker.Stop()
 		} else {
-
-			logger.Printlnf("SEARCHING AGAIN with budget=%d, %s", search.Budget, *search)
 			search.DoubleBudget()
-			logger.Printlnf("SEARCHING AGAIN with budget=%d", search.Budget)
 			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
 				Origin:   g.Origin,
 				Budget:   search.Budget,
@@ -515,11 +512,12 @@ func (g *Gossiper) handleSearchRequest(packet *packets_gossiper.SearchRequest, f
 func (g *Gossiper) handleSearchReply(packet *packets_gossiper.SearchReply) {
 	if packet.Destination == g.Origin {
 		g.FilesSearcher.Ack(packet)
-		for _, search := range g.FilesSearcher.GetFullSearches() {
-			if search.IsFull() {
-				// hw03 print
-				logger.Printlnf("SEARCH FINISHED")
-			}
+		for _, search := range g.FilesSearcher.GetLatestFullSearches() {
+			// hw03 print
+			logger.Printlnf("SEARCH FINISHED")
+			// print with more details
+			logger.Printlnf("SEARCH with keywords %s FINISHED with budget %d",
+				strings.Join(search.Keywords, ","), search.Budget)
 		}
 	} else {
 		g.transmit(packet, true)

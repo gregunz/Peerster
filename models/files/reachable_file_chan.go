@@ -2,7 +2,7 @@ package files
 
 import "github.com/gregunz/Peerster/models/updates"
 
-type T = *SearchMatch
+type T = *SearchMetadata
 
 type ReachableFileChan interface {
 	Get() T
