@@ -49,10 +49,16 @@ func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
 	bcf.Lock()
 	defer bcf.Unlock()
 
+	genesisHash := [32]byte{}
+	genesisHashString := utils.HashToHex(genesisHash[:])
+
 	previousId := utils.HashToHex(block.PrevHash[:])
 	var previousBlock *FileBlock
 	if bcf.chainLength == 0 {
 		// first block, welcome and be our master! (previous set to nil)
+		previousBlock = nil
+	} else if previousId == genesisHashString {
+		// new fork from the genesis block
 		previousBlock = nil
 	} else if forkBlock, ok := bcf.forks[previousId]; ok {
 		// no new fork but one longer head (previous is a fork)
@@ -118,9 +124,11 @@ func (bcf *BCF) addFileBlock(fb *FileBlock) bool {
 	if fb.previous == nil {
 		bcf.allBlocks[fb.id] = fb
 		bcf.forks[fb.id] = fb
-		logger.Printlnf(fb.ChainString()) // hw03 print
-		bcf.chainLength = fb.length
-		bcf.head = NewFileBlockBuilder(fb)
+		if bcf.chainLength == 0 {
+			logger.Printlnf(fb.ChainString()) // hw03 print
+			bcf.chainLength = fb.length
+			bcf.head = NewFileBlockBuilder(fb)
+		}
 		return true
 	} else if _, ok := bcf.forks[fb.previous.id]; ok {
 		bcf.allBlocks[fb.id] = fb
