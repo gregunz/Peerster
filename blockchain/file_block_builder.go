@@ -72,7 +72,7 @@ func (fbb *FileBlockBuilder) SetBlockAndBuild(block *packets_gossiper.Block) (*F
 
 	fbb.newTransactions = map[string]*Tx{} // clear previous entries in transactions if they were some
 	for _, txPublish := range block.Transactions {
-		tx := NewTx(txPublish)
+		tx := NewTx(&txPublish)
 		if !fbb.addTxIfValid(tx) { // one tx contradicts another
 			return nil, fmt.Errorf("one tx (%s) contradicts another previous tx", tx.File.String())
 		}

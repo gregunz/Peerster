@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/gregunz/Peerster/blockchain"
 	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/models/vector_clock"
@@ -8,7 +9,10 @@ import (
 )
 
 func main() {
-	testingChannels()
+	bcf := blockchain.NewBCF()
+	for !bcf.MineOnce() {
+	}
+	logger.Printlnf("%s", bcf.GetHead())
 }
 
 func testingDistributor() {

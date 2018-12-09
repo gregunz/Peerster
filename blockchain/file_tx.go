@@ -9,7 +9,7 @@ type Tx struct {
 	File packets_gossiper.File
 }
 
-func NewTx(publish packets_gossiper.TxPublish) *Tx {
+func NewTx(publish *packets_gossiper.TxPublish) *Tx {
 	//hash := publish.File.Hash()
 	return &Tx{
 		id:   publish.File.Name,

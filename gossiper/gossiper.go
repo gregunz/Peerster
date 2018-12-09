@@ -3,6 +3,7 @@ package gossiper
 import (
 	"fmt"
 	"github.com/dedis/protobuf"
+	"github.com/gregunz/Peerster/blockchain"
 	"github.com/gregunz/Peerster/common"
 	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/conv"
@@ -14,7 +15,6 @@ import (
 	"github.com/gregunz/Peerster/models/vector_clock"
 	"github.com/gregunz/Peerster/utils"
 	"net"
-	"strings"
 	"sync"
 	"time"
 )
@@ -50,6 +50,7 @@ type Gossiper struct {
 	FilesUploader   *files.Uploader
 	FilesDownloader *files.Downloader
 	FilesSearcher   *files.Searcher
+	BlockChainFile  *blockchain.BCF
 }
 
 func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, guiPort uint, peersSet *peers.Set,
@@ -101,6 +102,7 @@ func NewGossiper(simple bool, address *peers.Address, name string, uiPort uint, 
 		FilesUploader:   uploader,
 		FilesDownloader: downloader,
 		FilesSearcher:   searcher,
+		BlockChainFile:  blockchain.NewBCF(),
 	}
 }
 
@@ -131,6 +133,9 @@ func (g *Gossiper) Start(group *sync.WaitGroup) {
 
 	group.Add(1)
 	go g.routeRumorTicker(group)
+
+	group.Add(1)
+	go g.blockchainRoutine(group)
 }
 
 func (g *Gossiper) listenClient(group *sync.WaitGroup) {
@@ -210,6 +215,20 @@ func (g *Gossiper) routeRumorTicker(group *sync.WaitGroup) {
 	}
 }
 
+func (g *Gossiper) blockchainRoutine(group *sync.WaitGroup) {
+	defer group.Done()
+
+	// mining routine
+	group.Add(1)
+	go g.BlockChainFile.MiningRoutine(group)
+
+	// handling new mined blocks
+	for {
+		newBlock := g.BlockChainFile.MineChan.Get()
+		g.sendPacket(newBlock.ToBlockPublish(blockHopLimit), g.PeersSet.GetSlice()...)
+	}
+}
+
 func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 	defer group.Done()
 	for {
@@ -226,87 +245,6 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 			}
 		}()
 	}
-}
-
-func (g *Gossiper) handleClientSimpleMode(packet *packets_client.ClientPacket) {
-	msg := &packets_gossiper.SimpleMessage{
-		Contents:      packet.PostMessage.Message,
-		RelayPeerAddr: g.GossipAddr.ToIpPort(),
-		OriginalName:  g.Origin,
-	}
-	g.sendPacket(msg, g.PeersSet.GetSlice()...)
-}
-
-func (g *Gossiper) handleClientNormalMode(packet *packets_client.ClientPacket) {
-	if packet.IsPostMessage() && packet.PostMessage.Destination == "" {
-		meHandler := g.VectorClock.GetOrCreateHandler(g.Origin)
-		rumorMessage := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message)
-		if randomPeer := g.PeersSet.GetRandom(); randomPeer != nil {
-			g.sendPacket(rumorMessage, randomPeer)
-		}
-	} else if packet.IsPostMessage() && packet.PostMessage.Destination != "" {
-		meHandler := g.Conversations.GetOrCreateHandler(g.Origin)
-		msg := meHandler.CreateAndSaveNextMessage(packet.PostMessage.Message, packet.PostMessage.Destination, hopLimit)
-		g.transmit(msg, false)
-	} else if packet.IsRequestFile() {
-		if packet.RequestFile.Destination != "" { // download file from node (hw02)
-			g.downloadHandler(packet.RequestFile)
-		} else { // download a searched file (hw03)
-			for _, search := range g.FilesSearcher.GetAllSearches() {
-				// let's download the file now from all origins involved
-				for _, requestFile := range search.ToRequestFiles(packet.RequestFile.Filename, packet.RequestFile.Request) {
-					g.downloadHandler(requestFile)
-				}
-
-			}
-		}
-	} else if packet.IsIndexFile() {
-		g.FilesUploader.IndexFile(packet.IndexFile.Filename, true)
-	} else if packet.IsSearchFiles() {
-		g.searchHandler(packet.SearchFiles)
-	}
-}
-
-func (g *Gossiper) downloadHandler(requestFile *packets_client.RequestFilePacket) {
-	// not checking if can download because it does not enable downloading from different origins yet
-	canDownload := g.FilesDownloader.AddNewFile(requestFile.Filename, requestFile.Request)
-	if canDownload {
-		request := &packets_gossiper.DataRequest{
-			Origin:      g.Origin,
-			Destination: requestFile.Destination,
-			HopLimit:    hopLimit,
-			HashValue:   utils.HexToHash(requestFile.Request),
-		}
-		g.transmit(request, false)
-	}
-}
-
-func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
-
-	search := g.FilesSearcher.Search(packet.Keywords, packet.Budget)
-	g.sendBudgetPacket(&packets_gossiper.SearchRequest{
-		Origin:   g.Origin,
-		Budget:   search.Budget,
-		Keywords: search.Keywords,
-	})
-
-	searchTicker := time.NewTicker(doublingBudgetTimeout)
-	for range searchTicker.C {
-
-		if search.IsFull() || !search.DoubleBudget() {
-			logger.Printlnf("SEARCH with keywords %s STOPPED with budget %d",
-				strings.Join(search.Keywords, ","), search.Budget)
-			searchTicker.Stop()
-		} else {
-			search.DoubleBudget()
-			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
-				Origin:   g.Origin,
-				Budget:   search.Budget,
-				Keywords: search.Keywords,
-			})
-		}
-	}
-
 }
 
 func (g *Gossiper) sendBudgetPacket(packet packets_gossiper.BudgetPacket, exceptFromPeer ...*peers.Peer) {
@@ -352,175 +290,12 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 				g.handleSearchRequest(packet.SearchRequest, fromPeer)
 			} else if packet.IsSearchReply() {
 				g.handleSearchReply(packet.SearchReply)
+			} else if packet.IsTxPublish() {
+				g.handleTxPublish(packet.TxPublish)
+			} else if packet.IsBlockPublish() {
+				g.handleBlockPublish(packet.BlockPublish)
 			}
 		}()
-	}
-}
-
-func (g *Gossiper) handleSimple(msg *packets_gossiper.SimpleMessage, fromPeer *peers.Peer) {
-	msgToSend := &packets_gossiper.SimpleMessage{
-		Contents:      msg.Contents,
-		RelayPeerAddr: g.GossipAddr.ToIpPort(),
-		OriginalName:  msg.OriginalName,
-	}
-	toPeers := g.PeersSet.Filter(fromPeer).GetSlice() // not resending to sender
-
-	g.sendPacket(msgToSend, toPeers...)
-}
-
-func (g *Gossiper) handleRumor(msg *packets_gossiper.RumorMessage, fromPeer *peers.Peer) {
-
-	// saving message
-	g.VectorClock.GetOrCreateHandler(msg.Origin).Save(msg)
-	if msg.Origin != g.Origin {
-		g.RoutingTable.GetOrCreateHandler(msg.Origin).AckRumor(msg, fromPeer)
-	}
-
-	msgToSend := &packets_gossiper.RumorMessage{
-		ID:     msg.ID,
-		Text:   msg.Text,
-		Origin: msg.Origin,
-	}
-
-	// sendPacket to a random peer
-	if randomPeer := g.PeersSet.GetRandom(fromPeer); randomPeer != nil {
-		g.sendPacket(msgToSend, randomPeer)
-	}
-
-	// send back status packet to sender (= ack of the rumor)
-	g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer)
-}
-
-func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer *peers.Peer) {
-	rumorMsg, remoteHasMsg := g.VectorClock.Compare(packet.ToMap())
-
-	if rumorMsg != nil { // has a msg to send
-		g.sendPacket(rumorMsg, fromPeer) // send the new message
-	}
-	if remoteHasMsg { // remote has new message
-		g.sendPacket(g.VectorClock.ToStatusPacket(), fromPeer) // send status to remote
-	}
-	if rumorMsg == nil && !remoteHasMsg { // is up to date
-		fromPeer.FlipTimeout.Trigger()
-		if !g.debug {
-			logger.Printlnf("IN SYNC WITH %s", fromPeer.Addr.ToIpPort())
-		}
-	} else {
-		fromPeer.FlipTimeout.Cancel()
-	}
-}
-
-func (g *Gossiper) transmit(packetToTransmit packets_gossiper.Transmittable, decreaseHop bool) {
-	if decreaseHop {
-		packetToTransmit = packetToTransmit.Hopped()
-	}
-	if packetToTransmit.IsTransmittable() && packetToTransmit.Dest() != g.Origin {
-		toPeer := g.RoutingTable.GetOrCreateHandler(packetToTransmit.Dest()).GetPeer()
-		if toPeer != nil {
-			g.sendPacket(packetToTransmit, toPeer)
-		}
-	}
-}
-
-func (g *Gossiper) handlePrivate(msg *packets_gossiper.PrivateMessage) {
-	if msg.Destination != g.Origin {
-		g.transmit(msg, true)
-	} else { // message is for us
-		g.Conversations.GetOrCreateHandler(msg.Origin).Save(msg)
-	}
-}
-
-func (g *Gossiper) handleDataRequest(packet *packets_gossiper.DataRequest) {
-	if packet.Destination != g.Origin {
-		g.transmit(packet, true)
-	} else { // packet is for us
-		if g.FilesUploader.HasChunk(packet.HashValue) {
-			data := g.FilesUploader.GetData(packet.HashValue)
-			reply := &packets_gossiper.DataReply{
-				Origin:      g.Origin,
-				Destination: packet.Origin,
-				HopLimit:    hopLimit,
-				HashValue:   packet.HashValue,
-				Data:        data,
-			}
-			g.transmit(reply, false)
-		}
-	}
-}
-
-func (g *Gossiper) handleDataReply(packet *packets_gossiper.DataReply) {
-	if packet.Destination != g.Origin {
-		g.transmit(packet, true)
-	} else { // packet is for us
-		dataHash := utils.HashToHex(packet.HashValue)
-		output := g.FilesDownloader.AddChunkOrMetafile(dataHash, packet.Data)
-		awaitingHashes, index, filename, fileIsBuilt := output.AwaitingMetafile, output.ChunkIndex, output.FileName, output.FileIsBuilt
-		if index == 0 { // metafile
-			logger.Printlnf("DOWNLOADING metafile of %s from %s", filename, packet.Origin)
-		} else if index > 0 { // chunk
-			logger.Printlnf("DOWNLOADING %s chunk %d from %s", filename, index, packet.Origin)
-		}
-		if len(awaitingHashes) > 0 {
-			for _, hashString := range awaitingHashes {
-				packetToSend := &packets_gossiper.DataRequest{
-					Origin:      g.Origin,
-					Destination: packet.Origin,
-					HopLimit:    hopLimit,
-					HashValue:   utils.HexToHash(hashString),
-				}
-				g.transmit(packetToSend, false)
-			}
-		} else if fileIsBuilt { // download complete
-			g.FilesUploader.IndexFile(filename, false)
-		} else {
-			logger.Printlnf("already received this data (hash=%s)", dataHash)
-		}
-	}
-
-}
-
-func (g *Gossiper) handleSearchRequest(packet *packets_gossiper.SearchRequest, fromPeer *peers.Peer) {
-
-	// forward request with budget - 1
-	newPacket := &packets_gossiper.SearchRequest{
-		Origin:   packet.Origin,
-		Budget:   packet.Budget - 1,
-		Keywords: packet.Keywords,
-	}
-	g.sendBudgetPacket(newPacket, fromPeer)
-
-	// reply to the request given the matching results
-
-	matchingResults := g.FilesDownloader.GetAllSearchResults(packet.Keywords)
-	for _, indexedFile := range g.FilesUploader.GetAllFiles() {
-		if utils.Match(indexedFile.Name, packet.Keywords) {
-			matchingResults = append(matchingResults, indexedFile.ToSearchResult())
-		}
-	}
-
-	if len(matchingResults) > 0 {
-		reply := &packets_gossiper.SearchReply{
-			Origin:      g.Origin,
-			Destination: packet.Origin,
-			HopLimit:    hopLimit,
-			Results:     matchingResults,
-		}
-		g.transmit(reply, false)
-	}
-}
-
-func (g *Gossiper) handleSearchReply(packet *packets_gossiper.SearchReply) {
-	if packet.Destination == g.Origin {
-		g.FilesSearcher.Ack(packet)
-		for _, search := range g.FilesSearcher.GetLatestFullSearches() {
-			// hw03 print
-			logger.Printlnf("SEARCH FINISHED")
-			// print with more details
-			logger.Printlnf("SEARCH with keywords %s FINISHED with budget %d",
-				strings.Join(search.Keywords, ","), search.Budget)
-		}
-	} else {
-		g.transmit(packet, true)
 	}
 }
 

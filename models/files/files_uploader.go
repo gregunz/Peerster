@@ -23,7 +23,7 @@ func NewFilesUploader(activateChan bool) *Uploader {
 	}
 }
 
-func (uploader *Uploader) IndexFile(filename string, isSharedPath bool) {
+func (uploader *Uploader) IndexFile(filename string, isSharedPath bool) *FileType {
 	uploader.mux.Lock()
 	defer uploader.mux.Unlock()
 
@@ -35,12 +35,12 @@ func (uploader *Uploader) IndexFile(filename string, isSharedPath bool) {
 	}
 	file := NewFile(filename, path)
 	if file == nil {
-		return
+		return nil
 	}
 	_, ok := uploader.chunksToFile[file.MetaHash]
 	if ok {
 		common.HandleAbort("file is already indexed", nil)
-		return
+		return nil
 	}
 	uploader.chunksToFile[file.MetaHash] = file
 	uploader.filenameToFile[filename] = file
@@ -52,6 +52,7 @@ func (uploader *Uploader) IndexFile(filename string, isSharedPath bool) {
 		}
 		uploader.chunksToFile[hash] = file
 	}
+	return file
 }
 
 func (uploader *Uploader) GetAllFiles() []*FileType {

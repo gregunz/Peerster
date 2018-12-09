@@ -3,9 +3,11 @@ package blockchain
 import (
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/utils"
 	"sync"
+	"time"
 )
 
 type BCF struct {
@@ -15,16 +17,19 @@ type BCF struct {
 	headLength int
 	head       *FileBlockBuilder // the block we will be mining over (not yet on the blockchain, hence *Builder)
 
+	MineChan MineChan
+
 	sync.RWMutex
 }
 
-func NewBCF(block *packets_gossiper.Block) *BCF {
-	bcf := &BCF{
-		forks:     map[string]*FileBlock{},
-		allBlocks: map[string]*FileBlock{},
+func NewBCF() *BCF {
+	return &BCF{
+		forks:      map[string]*FileBlock{},
+		allBlocks:  map[string]*FileBlock{},
+		headLength: 0,
+		head:       NewFileBlockBuilder(nil),
+		MineChan:   NewMineChan(true),
 	}
-	bcf.AddBlock(block)
-	return bcf
 }
 
 func (bcf *BCF) AddTx(tx *Tx) {
@@ -32,6 +37,13 @@ func (bcf *BCF) AddTx(tx *Tx) {
 	defer bcf.RUnlock()
 
 	bcf.head.AddTxIfValid(tx)
+}
+
+func (bcf *BCF) GetHead() *FileBlockBuilder {
+	bcf.RLock()
+	defer bcf.RUnlock()
+
+	return bcf.head
 }
 
 func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
@@ -67,13 +79,38 @@ func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
 	}
 }
 
-func (bcf *BCF) MineOnce(block *packets_gossiper.Block) (*FileBlock, error) {
+func (bcf *BCF) MineOnce() bool {
 	bcf.Lock()
 	defer bcf.Unlock()
 
 	nonce := utils.Random32Bytes()
 	bcf.head.SetNonce(nonce)
-	return bcf.head.Build()
+	fb, err := bcf.head.Build()
+	if err != nil {
+		//common.HandleError(err)
+		return false
+	}
+	if bcf.addFileBlock(fb) {
+		logger.Printlnf("FOUND-BLOCK %s", utils.HashToHex(fb.hash[:]))
+		bcf.MineChan.Push(fb)
+		return true
+	}
+	common.HandleError(fmt.Errorf("block mined not added to chain, this should not happen"))
+	return false
+}
+
+// public functions without locks
+
+func (bcf *BCF) MiningRoutine(group *sync.WaitGroup) {
+	defer group.Done()
+	for {
+		if len(bcf.head.newTransactions) > 0 { // only mine if new transactions
+			bcf.MineOnce()
+		}
+		// give time to other functions to access locks between mining
+		// and allows cpu not to be overused when no transactions
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // private functions without locks
