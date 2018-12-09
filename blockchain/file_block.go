@@ -1,8 +1,10 @@
 package blockchain
 
 import (
+	"fmt"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
-	"sync"
+	"github.com/gregunz/Peerster/utils"
+	"strings"
 )
 
 type FileBlock struct {
@@ -13,8 +15,6 @@ type FileBlock struct {
 	hash         [32]byte
 	nonce        [32]byte
 	transactions map[string]*Tx
-
-	sync.RWMutex
 }
 
 func (fb *FileBlock) txIsValidWithThisBlock(newTx *Tx) bool {
@@ -23,9 +23,6 @@ func (fb *FileBlock) txIsValidWithThisBlock(newTx *Tx) bool {
 }
 
 func (fb *FileBlock) ToBlock(hopLimit uint32) *packets_gossiper.Block {
-	fb.RLock()
-	defer fb.RUnlock()
-
 	transactions := []packets_gossiper.TxPublish{}
 	for _, tx := range fb.transactions {
 		transactions = append(transactions, tx.ToTxPublish(hopLimit))
@@ -43,11 +40,30 @@ func (fb *FileBlock) ToBlock(hopLimit uint32) *packets_gossiper.Block {
 }
 
 func (fb *FileBlock) ToBlockPublish(hopLimit uint32) *packets_gossiper.BlockPublish {
-	fb.RLock()
-	defer fb.RUnlock()
-
 	return &packets_gossiper.BlockPublish{
 		Block:    *fb.ToBlock(hopLimit),
 		HopLimit: hopLimit,
 	}
+}
+
+func (fb *FileBlock) String() string {
+	prevHash := [32]byte{}
+	if fb.previous != nil {
+		prevHash = fb.previous.hash
+	}
+	txStrings := []string{}
+	for _, tx := range fb.transactions {
+		txStrings = append(txStrings, tx.File.Name)
+	}
+	return fmt.Sprintf("%s:%s:%s", fb.hash, utils.HashToHex(prevHash[:]), strings.Join(txStrings, ","))
+}
+
+func (fb *FileBlock) ChainString() string {
+	blockStrings := []string{}
+	block := fb
+	for block != nil {
+		blockStrings = append(blockStrings, block.String())
+		block = block.previous
+	}
+	return fmt.Sprintf("CHAIN %s", strings.Join(blockStrings, " "))
 }
