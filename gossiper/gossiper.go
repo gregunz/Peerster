@@ -225,7 +225,11 @@ func (g *Gossiper) blockchainRoutine(group *sync.WaitGroup) {
 	// handling new mined blocks
 	for {
 		newBlock := g.BlockChainFile.MineChan.Get()
+		if newBlock.IsAfterGenesis() {
+			time.Sleep(5 * time.Second)
+		}
 		g.sendPacket(newBlock.ToBlockPublish(blockHopLimit), g.PeersSet.GetSlice()...)
+		//time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -248,6 +252,7 @@ func (g *Gossiper) handleClient(group *sync.WaitGroup) {
 }
 
 func (g *Gossiper) sendBudgetPacket(packet packets_gossiper.BudgetPacket, exceptFromPeer ...*peers.Peer) {
+	logger.Printlnf("SEARCH with budget=%d", packet.GetBudget())
 	if packet.GetBudget() > 0 {
 		toPeers := g.PeersSet.Filter(exceptFromPeer...).GetSlice()
 		if len(toPeers) > 0 {
@@ -291,9 +296,9 @@ func (g *Gossiper) handleGossip(group *sync.WaitGroup) {
 			} else if packet.IsSearchReply() {
 				g.handleSearchReply(packet.SearchReply)
 			} else if packet.IsTxPublish() {
-				g.handleTxPublish(packet.TxPublish)
+				g.handleTxPublish(packet.TxPublish, fromPeer)
 			} else if packet.IsBlockPublish() {
-				g.handleBlockPublish(packet.BlockPublish)
+				g.handleBlockPublish(packet.BlockPublish, fromPeer)
 			}
 		}()
 	}

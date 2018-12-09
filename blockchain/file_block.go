@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/utils"
+	"sort"
 	"strings"
 )
 
@@ -15,6 +16,10 @@ type FileBlock struct {
 	hash         [32]byte
 	nonce        [32]byte
 	transactions map[string]*Tx
+}
+
+func (fb *FileBlock) IsAfterGenesis() bool {
+	return fb.previous == nil
 }
 
 func (fb *FileBlock) txIsValidWithThisBlock(newTx *Tx) bool {
@@ -55,7 +60,10 @@ func (fb *FileBlock) String() string {
 	for _, tx := range fb.transactions {
 		txStrings = append(txStrings, tx.File.Name)
 	}
-	return fmt.Sprintf("%s:%s:%s", fb.hash, utils.HashToHex(prevHash[:]), strings.Join(txStrings, ","))
+	sort.Slice(txStrings, func(i, j int) bool {
+		return txStrings[i] < txStrings[j]
+	})
+	return fmt.Sprintf("%s:%s:%s", utils.HashToHex(fb.hash[:]), utils.HashToHex(prevHash[:]), strings.Join(txStrings, ","))
 }
 
 func (fb *FileBlock) ChainString() string {

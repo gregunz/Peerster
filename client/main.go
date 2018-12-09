@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultUIPort = 8080
-	defaultBudget = 2
+	defaultBudget = 0
 )
 
 var uiPort uint
@@ -31,7 +31,7 @@ func init() {
 	flag.StringVar(&message, "msg", "", "message to be sent")
 	flag.StringVar(&request, "request", "", "request metafile of this hash")
 	flag.Var(&keywords, "keywords", "start a file search with those comma-separated keywords")
-	flag.Uint64Var(&budget, "budget", defaultBudget, "budget for the file search")
+	flag.Uint64Var(&budget, "budget", defaultBudget, "budget for the file search (0 means increasing budget from 2 up to 32)")
 }
 
 func main() {

@@ -148,9 +148,6 @@ func (packet *GossipPacket) AckPrint(fromPeer *peers.Peer, myOrigin string) {
 	if packet.IsPrivate() {
 		packet.Private.AckPrint(myOrigin)
 	}
-
-	// for now on, some of the rest is commented for better performance, might setup a verbosity level to enable them anyway
-
 	if packet.IsDataRequest() { //not required by homework (to check)
 		packet.DataRequest.AckPrint(myOrigin)
 	}

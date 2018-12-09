@@ -23,3 +23,16 @@ func (packet *TxPublish) ToGossipPacket() *GossipPacket {
 func (packet *TxPublish) String() string {
 	return fmt.Sprintf("TX PUBLISH file <%s> with hop-limit %d", packet.File.String(), packet.HopLimit)
 }
+
+func (msg TxPublish) Hopped() Transmittable {
+	msg.HopLimit -= 1
+	return &msg
+}
+
+func (msg *TxPublish) Dest() string {
+	return ""
+}
+
+func (msg *TxPublish) IsTransmittable() bool {
+	return msg.HopLimit > 0
+}

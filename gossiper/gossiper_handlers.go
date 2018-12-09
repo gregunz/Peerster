@@ -1,6 +1,7 @@
 package gossiper
 
 import (
+	"github.com/gregunz/Peerster/blockchain"
 	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/packets/packets_client"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
@@ -20,6 +21,8 @@ func (g *Gossiper) uploadHandler(filename string, fromSharedPath bool) {
 			},
 			HopLimit: hopLimit,
 		}
+		g.BlockChainFile.AddTx(blockchain.NewTx(txPublish))
+		// sending transaction
 		g.sendPacket(txPublish, g.PeersSet.GetSlice()...)
 	}
 }
@@ -39,6 +42,10 @@ func (g *Gossiper) downloadHandler(requestFile *packets_client.RequestFilePacket
 }
 
 func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
+	increasingBudget := packet.Budget == 0
+	if increasingBudget {
+		packet.Budget = 2
+	}
 
 	search := g.FilesSearcher.Search(packet.Keywords, packet.Budget)
 	g.sendBudgetPacket(&packets_gossiper.SearchRequest{
@@ -47,21 +54,24 @@ func (g *Gossiper) searchHandler(packet *packets_client.SearchFilesPacket) {
 		Keywords: search.Keywords,
 	})
 
-	searchTicker := time.NewTicker(doublingBudgetTimeout)
-	for range searchTicker.C {
+	if increasingBudget {
+		go func() {
+			searchTicker := time.NewTicker(doublingBudgetTimeout)
+			for range searchTicker.C {
 
-		if search.IsFull() || !search.DoubleBudget() {
-			logger.Printlnf("SEARCH with keywords %s STOPPED with budget %d",
-				strings.Join(search.Keywords, ","), search.Budget)
-			searchTicker.Stop()
-		} else {
-			search.DoubleBudget()
-			g.sendBudgetPacket(&packets_gossiper.SearchRequest{
-				Origin:   g.Origin,
-				Budget:   search.Budget,
-				Keywords: search.Keywords,
-			})
-		}
+				if search.IsFull() || !search.DoubleBudget() {
+					logger.Printlnf("SEARCH with keywords %s STOPPED with budget %d",
+						strings.Join(search.Keywords, ","), search.Budget)
+					searchTicker.Stop()
+				} else {
+					g.sendBudgetPacket(&packets_gossiper.SearchRequest{
+						Origin:   g.Origin,
+						Budget:   search.Budget,
+						Keywords: search.Keywords,
+					})
+				}
+			}
+		}()
 	}
 
 }

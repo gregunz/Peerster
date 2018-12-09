@@ -398,11 +398,23 @@ func TestPeerster_BlockchainBattle(t *testing.T) {
 		largestChain = eChainUpd
 	}
 
-	assert.Contains(t, largestChain, aChainUpd[len("CHAIN "):])
-	assert.Contains(t, largestChain, bChainUpd[len("CHAIN "):])
-	assert.Contains(t, largestChain, cChainUpd[len("CHAIN "):])
-	assert.Contains(t, largestChain, dChainUpd[len("CHAIN "):])
-	assert.Contains(t, largestChain, eChainUpd[len("CHAIN "):])
+	const substringFraction = 0.25
+
+	// Check that at least "25%" of the chain have converged (starting from the beginning)
+	idx := len(aChainUpd) - int(float64(len(aChainUpd))*substringFraction)
+	assert.Contains(t, largestChain, aChainUpd[idx:])
+
+	idx = len(bChainUpd) - int(float64(len(bChainUpd))*substringFraction)
+	assert.Contains(t, largestChain, bChainUpd[idx:])
+
+	idx = len(cChainUpd) - int(float64(len(cChainUpd))*substringFraction)
+	assert.Contains(t, largestChain, cChainUpd[idx:])
+
+	idx = len(dChainUpd) - int(float64(len(dChainUpd))*substringFraction)
+	assert.Contains(t, largestChain, dChainUpd[idx:])
+
+	idx = len(eChainUpd) - int(float64(len(eChainUpd))*substringFraction)
+	assert.Contains(t, largestChain, eChainUpd[idx:])
 }
 
 /*==== Helpers ====*/

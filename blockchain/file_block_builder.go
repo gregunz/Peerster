@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/gregunz/Peerster/common"
+	"github.com/gregunz/Peerster/logger"
 	"github.com/gregunz/Peerster/models/packets/packets_gossiper"
 	"github.com/gregunz/Peerster/utils"
 	"sync"
@@ -64,7 +65,6 @@ func (fbb *FileBlockBuilder) AddTxIfValid(newTx *Tx) bool {
 
 func (fbb *FileBlockBuilder) SetBlockAndBuild(block *packets_gossiper.Block) (*FileBlock, error) {
 	fbb.Lock()
-	defer fbb.Unlock()
 
 	if fbb.previous != nil && fbb.previous.hash != block.PrevHash {
 		return nil, fmt.Errorf("trying to add a block over a mismatching previous file-block")
@@ -80,6 +80,7 @@ func (fbb *FileBlockBuilder) SetBlockAndBuild(block *packets_gossiper.Block) (*F
 	fbb.prevHash = block.PrevHash // in case previous is nil when computing hash (prevHash needed)
 	fbb.nonce = block.Nonce
 
+	fbb.Unlock()
 	return fbb.Build()
 }
 
@@ -131,11 +132,14 @@ func (fbb *FileBlockBuilder) Hash() (out [32]byte) {
 
 func (fbb *FileBlockBuilder) addTxIfValid(newTx *Tx) bool {
 	if _, ok := fbb.pastTransactions[newTx.id]; ok {
+		//logger.Printlnf("INVALID tx=<%s> with other=<%s>", newTx.File.String(), other.File.String())
 		return false
 	}
 	if _, ok := fbb.newTransactions[newTx.id]; ok {
+		//logger.Printlnf("INVALID tx=<%s> with other=<%s>", newTx.File.String(), other.File.String())
 		return false
 	}
+	logger.Printlnf("ADDED new tx=%s", newTx.File.String())
 	fbb.newTransactions[newTx.id] = newTx
 	return true
 }

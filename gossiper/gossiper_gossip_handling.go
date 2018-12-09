@@ -62,15 +62,16 @@ func (g *Gossiper) handleStatus(packet *packets_gossiper.StatusPacket, fromPeer 
 	}
 }
 
-func (g *Gossiper) transmit(packetToTransmit packets_gossiper.Transmittable, decreaseHop bool) {
+func (g *Gossiper) transmit(packetToTransmit packets_gossiper.Transmittable, decreaseHop bool, toPeers ...*peers.Peer) {
 	if decreaseHop {
 		packetToTransmit = packetToTransmit.Hopped()
 	}
 	if packetToTransmit.IsTransmittable() && packetToTransmit.Dest() != g.Origin {
 		toPeer := g.RoutingTable.GetOrCreateHandler(packetToTransmit.Dest()).GetPeer()
 		if toPeer != nil {
-			g.sendPacket(packetToTransmit, toPeer)
+			toPeers = append(toPeers, toPeer)
 		}
+		g.sendPacket(packetToTransmit, toPeer)
 	}
 }
 
@@ -176,12 +177,12 @@ func (g *Gossiper) handleSearchReply(packet *packets_gossiper.SearchReply) {
 	}
 }
 
-func (g *Gossiper) handleTxPublish(packet *packets_gossiper.TxPublish) {
-	//TODO
+func (g *Gossiper) handleTxPublish(packet *packets_gossiper.TxPublish, fromPeer *peers.Peer) {
+	g.transmit(packet, true, g.PeersSet.Filter(fromPeer).GetSlice()...)
 	g.BlockChainFile.AddTx(blockchain.NewTx(packet))
 }
 
-func (g *Gossiper) handleBlockPublish(packet *packets_gossiper.BlockPublish) {
-	//TODO
+func (g *Gossiper) handleBlockPublish(packet *packets_gossiper.BlockPublish, fromPeer *peers.Peer) {
+	g.transmit(packet, true, g.PeersSet.Filter(fromPeer).GetSlice()...)
 	g.BlockChainFile.AddBlock(&packet.Block)
 }

@@ -49,16 +49,13 @@ func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
 	bcf.Lock()
 	defer bcf.Unlock()
 
-	genesisHash := [32]byte{}
-	genesisHashString := utils.HashToHex(genesisHash[:])
+	//genesisHash := [32]byte{}
+	//genesisHashString := utils.HashToHex(genesisHash[:])
 
 	previousId := utils.HashToHex(block.PrevHash[:])
 	var previousBlock *FileBlock
 	if bcf.chainLength == 0 {
 		// first block, welcome and be our master! (previous set to nil)
-		previousBlock = nil
-	} else if previousId == genesisHashString {
-		// new fork from the genesis block
 		previousBlock = nil
 	} else if forkBlock, ok := bcf.forks[previousId]; ok {
 		// no new fork but one longer head (previous is a fork)
@@ -67,20 +64,23 @@ func (bcf *BCF) AddBlock(block *packets_gossiper.Block) bool {
 		// new fork, cannot be longest head (previous is part of the chain)
 		previousBlock = singleBlock
 	} else if utils.AllZero(block.PrevHash[:]) {
-		// new fork but without tail ??? should I care ?
-		//Todo: do better but for now we don't take it
-		return false
+		logger.Printlnf("forking from the genesis block")
+		// new fork from the genesis block
+		previousBlock = nil
 	} else {
 		// same as above ?
+		logger.Printlnf("block ignored (unknown reference from previous block)")
 		return false
 	}
 
 	newFBB := NewFileBlockBuilder(previousBlock)
+
 	if fb, err := newFBB.SetBlockAndBuild(block); err != nil {
-		common.HandleAbort("AddBlock failed when building", err)
+		common.HandleAbort("adding block failed when building", err)
 		return false
 	} else {
-		return bcf.addFileBlock(fb)
+		ret := bcf.addFileBlock(fb)
+		return ret
 	}
 }
 
@@ -111,16 +111,17 @@ func (bcf *BCF) MiningRoutine(group *sync.WaitGroup) {
 	for {
 		if len(bcf.head.newTransactions) > 0 { // only mine if new transactions
 			bcf.MineOnce()
+		} else {
+			// allows cpu not to be overused when no transactions
+			time.Sleep(100 * time.Millisecond)
 		}
-		// give time to other functions to access locks between mining
-		// and allows cpu not to be overused when no transactions
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
 // private functions without locks
 
 func (bcf *BCF) addFileBlock(fb *FileBlock) bool {
+	//logger.Printlnf("adding file block %s", fb.String())
 	if fb.previous == nil {
 		bcf.allBlocks[fb.id] = fb
 		bcf.forks[fb.id] = fb
@@ -128,6 +129,9 @@ func (bcf *BCF) addFileBlock(fb *FileBlock) bool {
 			logger.Printlnf(fb.ChainString()) // hw03 print
 			bcf.chainLength = fb.length
 			bcf.head = NewFileBlockBuilder(fb)
+		} else {
+			_, hashString, _ := findMergure(fb, bcf.head.previous)
+			logger.Printlnf("FORK-SHORTER %s", hashString)
 		}
 		return true
 	} else if _, ok := bcf.forks[fb.previous.id]; ok {
@@ -144,28 +148,34 @@ func (bcf *BCF) addFileBlock(fb *FileBlock) bool {
 				newHead.AddTxIfValid(tx)
 			}
 
-			if rewind, _ := findMergure(fb, bcf.head.previous); rewind > 0 {
+			if rewind, _, rewindTransactions := findMergure(fb, bcf.head.previous); rewind > 0 {
+				for _, tx := range rewindTransactions {
+					newHead.AddTxIfValid(tx)
+				}
 				logger.Printlnf("FORK-LONGER rewind %d blocks", rewind)
 			}
 			logger.Printlnf(fb.ChainString()) // hw03 print
 			bcf.chainLength = fb.length       //not new head which is 1 greater
 			bcf.head = newHead
 		} else {
-			_, hashString := findMergure(fb, bcf.head.previous)
+			_, hashString, _ := findMergure(fb, bcf.head.previous)
 			logger.Printlnf("FORK-SHORTER %s", hashString)
 		}
 		return true
 	} else if _, ok := bcf.allBlocks[fb.previous.id]; ok {
 		bcf.allBlocks[fb.id] = fb
 		bcf.forks[fb.id] = fb
+		_, hashString, _ := findMergure(fb, bcf.head.previous)
+		logger.Printlnf("FORK-SHORTER %s", hashString)
 		return true
 	}
 	common.HandleError(fmt.Errorf("file-block comes out of nowhere"))
 	return false
 }
 
-func findMergure(newBlock, oldBlock *FileBlock) (int, string) {
+func findMergure(newBlock, oldBlock *FileBlock) (int, string, []*Tx) {
 	rewind := 0
+	rewindTransactions := []*Tx{}
 	newChainBlocks := map[string]bool{}
 	newChainBlock := newBlock
 	for newChainBlock != nil {
@@ -175,11 +185,19 @@ func findMergure(newBlock, oldBlock *FileBlock) (int, string) {
 
 	oldChainBlock := oldBlock
 	for oldChainBlock != nil {
+		for _, tx := range oldChainBlock.transactions {
+			rewindTransactions = append(rewindTransactions, tx)
+		}
 		if _, ok := newChainBlocks[oldChainBlock.id]; ok {
 			break
 		}
 		rewind += 1
 		oldChainBlock = oldChainBlock.previous
 	}
-	return rewind, oldBlock.id
+	if oldChainBlock == nil {
+		genesisHash := [32]byte{}
+		genesisHashString := utils.HashToHex(genesisHash[:])
+		return rewind, genesisHashString, rewindTransactions
+	}
+	return rewind, oldChainBlock.id, rewindTransactions
 }
