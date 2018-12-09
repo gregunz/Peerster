@@ -363,7 +363,7 @@
         const searchFilesPacket = {
           'search-files': {
             'keywords': keywordsString.split(","),
-            'budget': 2,
+            'budget': 0,
           }
         };
         this.ws.send(JSON.stringify(searchFilesPacket));
